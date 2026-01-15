@@ -10,7 +10,9 @@ import Clients from "./pages/Clients";
 import RawMaterials from "./pages/RawMaterials";
 import FinishedProducts from "./pages/FinishedProducts";
 import Quotes from "./pages/Quotes";
+import QuoteView from "./pages/QuoteView";
 import ServiceOrders from "./pages/ServiceOrders";
+import ServiceOrderView from "./pages/ServiceOrderView";
 import Kanban from "./pages/Kanban";
 import Fiscal from "./pages/Fiscal";
 import NotFound from "./pages/NotFound";
@@ -31,8 +33,9 @@ const App = () => (
               <Route path="/bobinas" element={<RawMaterials />} />
               <Route path="/produtos" element={<FinishedProducts />} />
               <Route path="/orcamentos" element={<Quotes />} />
+              <Route path="/orcamentos/:id" element={<QuoteView />} />
               <Route path="/os" element={<ServiceOrders />} />
-              <Route path="/os/:id" element={<ServiceOrders />} />
+              <Route path="/os/:id" element={<ServiceOrderView />} />
               <Route path="/kanban" element={<Kanban />} />
               <Route path="/fiscal" element={<Fiscal />} />
               <Route path="*" element={<NotFound />} />

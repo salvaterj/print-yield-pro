@@ -128,6 +128,7 @@ export function YieldCalculator({
         eficiencia_percent: result.eficiencia_percent,
         desperdicio_mm: result.desperdicio_mm,
         metragem_total_final_m: result.metragem_total_final_m,
+        metragem_bobina_consumida_m: result.metragem_bobina_teorica_m,
         metragem_bobina_teorica_m: result.metragem_bobina_teorica_m,
         metragem_bobina_com_perdas_m: result.metragem_bobina_com_perdas_m,
         custo_estimado: result.custo_estimado,
