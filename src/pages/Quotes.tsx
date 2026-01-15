@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { Quote, QuoteItem, QuoteStatus } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Plus, Search, FileText, ArrowRight, Trash2 } from 'lucide-react';
+import { Plus, Search, FileText, ArrowRight, Trash2, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -21,6 +22,7 @@ const statusColors: Record<QuoteStatus, string> = {
 };
 
 export default function Quotes() {
+  const navigate = useNavigate();
   const { quotes, clients, finishedProducts, addQuote, updateQuote, addServiceOrder } = useApp();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'all'>('all');
@@ -217,7 +219,10 @@ export default function Quotes() {
                     <TableCell>
                       <Badge className={statusColors[quote.status]}>{quote.status}</Badge>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right space-x-2">
+                      <Button size="sm" variant="ghost" onClick={() => navigate(`/orcamentos/${quote.id}`)}>
+                        <Eye className="h-4 w-4" />
+                      </Button>
                       {quote.status !== 'aprovado' && quote.status !== 'perdido' && (
                         <Button size="sm" onClick={() => handleConvertToOS(quote)}>
                           Converter em OS <ArrowRight className="ml-1 h-4 w-4" />

@@ -91,9 +91,11 @@ export interface QuoteItem {
   produto_acabado?: FinishedProduct;
   descricao: string;
   qtd_rolos: number;
-  metragem_total_m: number; // calculated
+  metragem_total_m: number;
   valor_unit: number;
-  valor_total: number; // calculated
+  valor_total: number;
+  bobina_id?: string;
+  yield_snapshot?: YieldSnapshot;
 }
 
 export interface Quote {
@@ -110,6 +112,7 @@ export interface Quote {
   impostos: number;
   valor_final: number;
   status: QuoteStatus;
+  observacoes?: string;
   created_at: string;
   updated_at: string;
 }
@@ -120,12 +123,30 @@ export interface YieldSnapshot {
   metragem_por_rolo_m: number;
   quantidade_rolos: number;
   margem_corte_mm: number;
+  perdas_percent: number;
   pistas: number;
   eficiencia_percent: number;
   desperdicio_mm: number;
   metragem_total_final_m: number;
   metragem_bobina_consumida_m: number;
+  metragem_bobina_teorica_m: number;
+  metragem_bobina_com_perdas_m: number;
   custo_estimado: number;
+  bobina_id: string;
+  bobina_nome: string;
+  data_calculo: string;
+  usuario: string;
+}
+
+export interface YieldCalculatorOutput {
+  pistas: number;
+  eficiencia_percent: number;
+  desperdicio_mm: number;
+  metragem_total_final_m: number;
+  metragem_bobina_teorica_m: number;
+  metragem_bobina_com_perdas_m: number;
+  custo_estimado: number;
+  erro?: string;
 }
 
 export interface ServiceOrderLog {
