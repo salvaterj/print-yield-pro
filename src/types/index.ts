@@ -83,6 +83,8 @@ export interface FinishedProduct {
   observacoes: string;
   created_at: string;
   updated_at: string;
+  estoque_rolos: number;
+  estoque_minimo_rolos: number;
 }
 
 export interface QuoteItem {
@@ -98,6 +100,19 @@ export interface QuoteItem {
   yield_snapshot?: YieldSnapshot;
 }
 
+export interface Seller {
+  id: string;
+  nome: string;
+  email: string;
+  telefone: string;
+  comissao_padrao_percent: number;
+  clientes_ids: string[];
+  ativo: boolean;
+  observacoes: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Quote {
   id: string;
   numero: string;
@@ -105,6 +120,10 @@ export interface Quote {
   cliente_id: string;
   cliente?: Client;
   vendedor_nome: string;
+  vendedor_id?: string;
+  vendedor?: Seller;
+  comissao_percent?: number;
+  comissao_valor?: number;
   itens: QuoteItem[];
   prazo_entrega_dias?: number;
   data_prevista_saida?: string;
@@ -163,6 +182,8 @@ export interface ServiceOrder {
   cliente_id: string;
   cliente?: Client;
   vendedor_nome: string;
+  vendedor_id?: string;
+  vendedor?: Seller;
   impressor_nome: string;
   data_entrada: string;
   prazo_saida_ate: string;

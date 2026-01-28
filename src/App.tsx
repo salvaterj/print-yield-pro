@@ -15,6 +15,7 @@ import ServiceOrders from "./pages/ServiceOrders";
 import ServiceOrderView from "./pages/ServiceOrderView";
 import Kanban from "./pages/Kanban";
 import Fiscal from "./pages/Fiscal";
+import Sellers from "./pages/Sellers";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/clientes" element={<Clients />} />
+              <Route path="/vendedores" element={<Sellers />} />
               <Route path="/bobinas" element={<RawMaterials />} />
               <Route path="/produtos" element={<FinishedProducts />} />
               <Route path="/orcamentos" element={<Quotes />} />

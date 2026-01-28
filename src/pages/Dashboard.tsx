@@ -10,7 +10,8 @@ import {
   ArrowRight,
   Clock,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  PackageSearch
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { kanbanColumns } from '@/data/mockData';
@@ -18,7 +19,7 @@ import { format, parseISO, isBefore, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export default function Dashboard() {
-  const { serviceOrders, rawMaterials, quotes, clients } = useApp();
+  const { serviceOrders, rawMaterials, finishedProducts, quotes, clients } = useApp();
   
   const today = startOfDay(new Date());
   
@@ -36,6 +37,10 @@ export default function Dashboard() {
   
   const bobinasEstoqueBaixo = rawMaterials.filter(b => 
     b.saldo_m < b.comprimento_m * 0.3 && b.estoque_status !== 'consumida'
+  );
+  
+  const produtosEstoqueBaixo = finishedProducts.filter(p => 
+    p.estoque_rolos < p.estoque_minimo_rolos
   );
   
   const orcamentosPendentes = quotes.filter(q => 
@@ -86,6 +91,21 @@ export default function Dashboard() {
             </div>
             <p className="text-xs text-muted-foreground">
               De {rawMaterials.length} bobinas no estoque
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Produtos Estoque Baixo</CardTitle>
+            <PackageSearch className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${produtosEstoqueBaixo.length > 0 ? 'text-status-warning' : ''}`}>
+              {produtosEstoqueBaixo.length}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              De {finishedProducts.length} produtos cadastrados
             </p>
           </CardContent>
         </Card>
@@ -261,6 +281,42 @@ export default function Dashboard() {
                   <div className="text-right">
                     <p className="font-bold text-status-warning">{bobina.saldo_m}m</p>
                     <p className="text-xs text-muted-foreground">de {bobina.comprimento_m}m</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      
+      {/* Produtos com Estoque Baixo */}
+      {produtosEstoqueBaixo.length > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <PackageSearch className="h-5 w-5 text-status-warning" />
+              Produtos com Estoque Baixo
+            </CardTitle>
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/produtos">
+                Ver todos <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {produtosEstoqueBaixo.map(produto => (
+                <div 
+                  key={produto.id} 
+                  className="flex items-center justify-between p-3 rounded-lg border border-status-warning/30 bg-status-warning/5"
+                >
+                  <div>
+                    <p className="font-medium">{produto.nome}</p>
+                    <p className="text-sm text-muted-foreground">{produto.largura_mm}x{produto.altura_mm}mm</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-status-warning">{produto.estoque_rolos} rolos</p>
+                    <p className="text-xs text-muted-foreground">Mín: {produto.estoque_minimo_rolos}</p>
                   </div>
                 </div>
               ))}

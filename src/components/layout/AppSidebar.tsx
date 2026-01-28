@@ -7,7 +7,8 @@ import {
   ClipboardList, 
   Kanban, 
   Receipt,
-  Settings
+  Settings,
+  UserCog
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
@@ -30,6 +31,7 @@ import { cn } from '@/lib/utils';
 const menuItems = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard, profiles: ['admin', 'vendas', 'producao', 'fiscal', 'impressao'] },
   { title: 'Clientes', url: '/clientes', icon: Users, profiles: ['admin', 'vendas'] },
+  { title: 'Vendedores', url: '/vendedores', icon: UserCog, profiles: ['admin', 'vendas'] },
   { title: 'Bobinas', url: '/bobinas', icon: Package, profiles: ['admin', 'vendas', 'producao'] },
   { title: 'Produtos', url: '/produtos', icon: PackageSearch, profiles: ['admin', 'vendas'] },
   { title: 'Orçamentos', url: '/orcamentos', icon: FileText, profiles: ['admin', 'vendas'] },
