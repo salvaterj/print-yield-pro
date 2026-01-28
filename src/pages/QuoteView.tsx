@@ -15,7 +15,9 @@ import {
   Pencil,
   Calendar,
   User,
-  Building2
+  Building2,
+  UserCog,
+  Percent
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { QuoteStatus, YieldSnapshot } from '@/types';
@@ -38,10 +40,11 @@ const statusLabels: Record<QuoteStatus, string> = {
 export default function QuoteView() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { quotes, clients, finishedProducts, rawMaterials, updateQuote, addServiceOrder } = useApp();
+  const { quotes, clients, finishedProducts, rawMaterials, sellers, updateQuote, addServiceOrder } = useApp();
 
   const quote = quotes.find(q => q.id === id);
   const client = clients.find(c => c.id === quote?.cliente_id);
+  const seller = sellers.find(s => s.id === quote?.vendedor_id);
 
   if (!quote) {
     return (
@@ -159,7 +162,7 @@ export default function QuoteView() {
       </div>
 
       {/* Info Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
@@ -195,6 +198,22 @@ export default function QuoteView() {
             </div>
           </CardContent>
         </Card>
+        {(quote.comissao_percent !== undefined && quote.comissao_percent > 0) && (
+          <Card className="bg-primary/5 border-primary/20">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3">
+                <UserCog className="h-5 w-5 text-primary" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Comissão</p>
+                  <p className="font-medium text-primary">{quote.comissao_percent}%</p>
+                  <p className="text-sm font-medium text-primary">
+                    R$ {(quote.comissao_valor || 0).toFixed(2)}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Items */}

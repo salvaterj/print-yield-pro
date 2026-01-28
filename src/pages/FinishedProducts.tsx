@@ -40,7 +40,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, Search, PackageSearch } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, PackageSearch, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 const emptyProduct: Omit<FinishedProduct, 'id' | 'created_at' | 'updated_at'> = {
@@ -62,6 +62,8 @@ const emptyProduct: Omit<FinishedProduct, 'id' | 'created_at' | 'updated_at'> = 
   anilox_3: '',
   chapado: false,
   preco_base: undefined,
+  estoque_rolos: 0,
+  estoque_minimo_rolos: 0,
   observacoes: '',
 };
 
@@ -103,6 +105,8 @@ export default function FinishedProducts() {
         anilox_3: product.anilox_3,
         chapado: product.chapado,
         preco_base: product.preco_base,
+        estoque_rolos: product.estoque_rolos,
+        estoque_minimo_rolos: product.estoque_minimo_rolos,
         observacoes: product.observacoes,
       });
     } else {
@@ -196,8 +200,8 @@ export default function FinishedProducts() {
                 <TableHead>Material</TableHead>
                 <TableHead>Medidas</TableHead>
                 <TableHead>Metragem/Rolo</TableHead>
+                <TableHead>Estoque</TableHead>
                 <TableHead>Preço Base</TableHead>
-                <TableHead>Faca</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -209,46 +213,62 @@ export default function FinishedProducts() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredProducts.map((product) => (
-                  <TableRow key={product.id}>
-                    <TableCell className="font-medium">
-                      {product.nome}
-                      <div className="text-xs text-muted-foreground">
-                        {product.acabamento} / {product.cor_base}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="capitalize">
-                        {product.material_requerido}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{product.largura_mm}x{product.altura_mm}mm</TableCell>
-                    <TableCell>{product.metragem_por_rolo_m}m</TableCell>
-                    <TableCell>
-                      {product.preco_base ? `R$ ${product.preco_base.toFixed(2)}` : '-'}
-                    </TableCell>
-                    <TableCell className="capitalize">{product.faca_01}</TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenDialog(product)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setDeletingProduct(product);
-                          setIsDeleteDialogOpen(true);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
+                filteredProducts.map((product) => {
+                  const isLowStock = product.estoque_rolos < product.estoque_minimo_rolos;
+                  return (
+                    <TableRow key={product.id} className={isLowStock ? 'bg-status-warning/5' : ''}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          {isLowStock && <AlertTriangle className="h-4 w-4 text-status-warning" />}
+                          {product.nome}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {product.acabamento} / {product.cor_base}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="capitalize">
+                          {product.material_requerido}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{product.largura_mm}x{product.altura_mm}mm</TableCell>
+                      <TableCell>{product.metragem_por_rolo_m}m</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span className={isLowStock ? 'text-status-warning font-medium' : ''}>
+                            {product.estoque_rolos}
+                          </span>
+                          <span className="text-muted-foreground text-xs">rolos</span>
+                        </div>
+                        {isLowStock && (
+                          <p className="text-xs text-status-warning">Mín: {product.estoque_minimo_rolos}</p>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {product.preco_base ? `R$ ${product.preco_base.toFixed(2)}` : '-'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenDialog(product)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setDeletingProduct(product);
+                            setIsDeleteDialogOpen(true);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
@@ -408,6 +428,30 @@ export default function FinishedProducts() {
                   value={formData.preco_base || ''}
                   onChange={(e) => setFormData({ ...formData, preco_base: Number(e.target.value) || undefined })}
                 />
+              </div>
+            </div>
+
+            <div className="border-t pt-4 mt-2">
+              <h4 className="font-medium mb-3">Estoque</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="estoque_rolos">Estoque Atual (rolos)</Label>
+                  <Input
+                    id="estoque_rolos"
+                    type="number"
+                    value={formData.estoque_rolos || ''}
+                    onChange={(e) => setFormData({ ...formData, estoque_rolos: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="estoque_minimo_rolos">Estoque Mínimo (rolos)</Label>
+                  <Input
+                    id="estoque_minimo_rolos"
+                    type="number"
+                    value={formData.estoque_minimo_rolos || ''}
+                    onChange={(e) => setFormData({ ...formData, estoque_minimo_rolos: Number(e.target.value) })}
+                  />
+                </div>
               </div>
             </div>
 

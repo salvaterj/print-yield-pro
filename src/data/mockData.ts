@@ -4,7 +4,8 @@ import {
   FinishedProduct, 
   Quote, 
   ServiceOrder,
-  ProductionStatus 
+  ProductionStatus,
+  Seller 
 } from '@/types';
 
 // ============================================
@@ -169,6 +170,8 @@ export const mockFinishedProducts: FinishedProduct[] = [
     anilox_3: '',
     chapado: false,
     preco_base: 45.00,
+    estoque_rolos: 50,
+    estoque_minimo_rolos: 10,
     observacoes: 'Etiqueta padrão para preços',
     created_at: '2024-01-05T08:00:00Z',
     updated_at: '2024-01-05T08:00:00Z',
@@ -192,6 +195,8 @@ export const mockFinishedProducts: FinishedProduct[] = [
     anilox_3: '',
     chapado: true,
     preco_base: 58.00,
+    estoque_rolos: 30,
+    estoque_minimo_rolos: 15,
     observacoes: 'Etiqueta promocional',
     created_at: '2024-01-08T10:00:00Z',
     updated_at: '2024-01-08T10:00:00Z',
@@ -215,6 +220,8 @@ export const mockFinishedProducts: FinishedProduct[] = [
     anilox_3: '',
     chapado: false,
     preco_base: 35.00,
+    estoque_rolos: 5,
+    estoque_minimo_rolos: 20,
     observacoes: 'Etiqueta térmica para balanças',
     created_at: '2024-02-12T09:00:00Z',
     updated_at: '2024-02-12T09:00:00Z',
@@ -238,9 +245,41 @@ export const mockFinishedProducts: FinishedProduct[] = [
     anilox_3: '',
     chapado: false,
     preco_base: 12.00,
+    estoque_rolos: 100,
+    estoque_minimo_rolos: 25,
     observacoes: 'Para etiquetadoras manuais MX5500',
     created_at: '2024-03-01T11:00:00Z',
     updated_at: '2024-03-01T11:00:00Z',
+  },
+];
+
+// ============================================
+// Vendedores
+// ============================================
+export const mockSellers: Seller[] = [
+  {
+    id: 'seller-001',
+    nome: 'Mariana Silva',
+    email: 'mariana@labelflow.com',
+    telefone: '(11) 99999-0001',
+    comissao_padrao_percent: 5,
+    clientes_ids: ['cli-001', 'cli-004'],
+    ativo: true,
+    observacoes: 'Vendedora sênior',
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  },
+  {
+    id: 'seller-002',
+    nome: 'André Vendas',
+    email: 'andre@labelflow.com',
+    telefone: '(11) 99999-0002',
+    comissao_padrao_percent: 4,
+    clientes_ids: ['cli-002', 'cli-003'],
+    ativo: true,
+    observacoes: '',
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
   },
 ];
 
@@ -557,7 +596,7 @@ export const kanbanColumns = [
 ];
 
 // ============================================
-// Nomes de vendedores e impressores (mock)
+// Nomes de impressores (mock)
 // ============================================
-export const mockSellers = ['André Vendas', 'Beatriz Comercial', 'Carlos Representante'];
+export const mockSellerNames = ['André Vendas', 'Beatriz Comercial', 'Carlos Representante'];
 export const mockPrinters = ['Ricardo Impressão', 'Fábio Operador', 'Lucas Máquinas'];

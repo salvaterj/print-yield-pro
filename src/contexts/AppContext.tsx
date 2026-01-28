@@ -6,14 +6,16 @@ import {
   Quote, 
   ServiceOrder, 
   UserProfile,
-  ProductionStatus 
+  ProductionStatus,
+  Seller 
 } from '@/types';
 import { 
   mockClients, 
   mockRawMaterials, 
   mockFinishedProducts, 
   mockQuotes, 
-  mockServiceOrders 
+  mockServiceOrders,
+  mockSellers 
 } from '@/data/mockData';
 
 interface AppContextType {
@@ -55,6 +57,17 @@ interface AppContextType {
   updateServiceOrderStatus: (id: string, status: ProductionStatus, userId?: string) => void;
   deleteServiceOrder: (id: string) => void;
   
+  // Sellers
+  sellers: Seller[];
+  setSellers: React.Dispatch<React.SetStateAction<Seller[]>>;
+  addSeller: (seller: Seller) => void;
+  updateSeller: (id: string, seller: Partial<Seller>) => void;
+  deleteSeller: (id: string) => void;
+  getSellerByClientId: (clientId: string) => Seller | undefined;
+  
+  // Transformation
+  transformBobinaToProduct: (bobinaId: string, productId: string, quantidadeRolos: number, metragemConsumida: number) => void;
+  
   // Global search
   globalSearch: string;
   setGlobalSearch: (search: string) => void;
@@ -72,6 +85,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [finishedProducts, setFinishedProducts] = useState<FinishedProduct[]>(mockFinishedProducts);
   const [quotes, setQuotes] = useState<Quote[]>(mockQuotes);
   const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>(mockServiceOrders);
+  const [sellers, setSellers] = useState<Seller[]>(mockSellers);
   
   // Global search
   const [globalSearch, setGlobalSearch] = useState('');
@@ -163,6 +177,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setServiceOrders(prev => prev.filter(o => o.id !== id));
   };
   
+  // Seller CRUD
+  const addSeller = (seller: Seller) => {
+    setSellers(prev => [...prev, seller]);
+  };
+  
+  const updateSeller = (id: string, data: Partial<Seller>) => {
+    setSellers(prev => prev.map(s => s.id === id ? { ...s, ...data, updated_at: new Date().toISOString() } : s));
+  };
+  
+  const deleteSeller = (id: string) => {
+    setSellers(prev => prev.filter(s => s.id !== id));
+  };
+  
+  const getSellerByClientId = (clientId: string): Seller | undefined => {
+    return sellers.find(s => s.clientes_ids.includes(clientId) && s.ativo);
+  };
+  
+  // Transformation bobina -> product
+  const transformBobinaToProduct = (bobinaId: string, productId: string, quantidadeRolos: number, metragemConsumida: number) => {
+    setRawMaterials(prev => prev.map(b => 
+      b.id === bobinaId 
+        ? { ...b, saldo_m: b.saldo_m - metragemConsumida, updated_at: new Date().toISOString() }
+        : b
+    ));
+    setFinishedProducts(prev => prev.map(p => 
+      p.id === productId 
+        ? { ...p, estoque_rolos: p.estoque_rolos + quantidadeRolos, updated_at: new Date().toISOString() }
+        : p
+    ));
+  };
+  
   return (
     <AppContext.Provider value={{
       currentProfile,
@@ -193,6 +238,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateServiceOrder,
       updateServiceOrderStatus,
       deleteServiceOrder,
+      sellers,
+      setSellers,
+      addSeller,
+      updateSeller,
+      deleteSeller,
+      getSellerByClientId,
+      transformBobinaToProduct,
       globalSearch,
       setGlobalSearch,
     }}>

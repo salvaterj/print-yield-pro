@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import { RawMaterial, MaterialType, Finishing, BaseColor, StockStatus } from '@/types';
+import { RawMaterial, MaterialType, Finishing, BaseColor, StockStatus, FinishedProduct } from '@/types';
 import { 
   Table, 
   TableBody, 
@@ -39,7 +39,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, Search, Package, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Package, AlertTriangle, Factory, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 const emptyMaterial: Omit<RawMaterial, 'id' | 'created_at' | 'updated_at' | 'custo_por_m'> = {
@@ -71,13 +71,17 @@ const statusLabels: Record<StockStatus, string> = {
 };
 
 export default function RawMaterials() {
-  const { rawMaterials, addRawMaterial, updateRawMaterial, deleteRawMaterial } = useApp();
+  const { rawMaterials, finishedProducts, addRawMaterial, updateRawMaterial, deleteRawMaterial, transformBobinaToProduct } = useApp();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StockStatus | 'all'>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isTransformDialogOpen, setIsTransformDialogOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<RawMaterial | null>(null);
   const [deletingMaterial, setDeletingMaterial] = useState<RawMaterial | null>(null);
+  const [transformingMaterial, setTransformingMaterial] = useState<RawMaterial | null>(null);
+  const [selectedProductId, setSelectedProductId] = useState('');
+  const [quantidadeRolos, setQuantidadeRolos] = useState(0);
   const [formData, setFormData] = useState(emptyMaterial);
 
   const filteredMaterials = rawMaterials.filter(material => {
@@ -151,6 +155,75 @@ export default function RawMaterials() {
     return material.saldo_m < material.comprimento_m * 0.3 && material.estoque_status !== 'consumida';
   };
 
+  // Transformation calculations
+  const getCompatibleProducts = (bobina: RawMaterial) => {
+    return finishedProducts.filter(p => {
+      return p.material_requerido === bobina.tipo && 
+             p.acabamento === bobina.acabamento &&
+             p.cor_base === bobina.cor_base &&
+             p.largura_mm <= bobina.largura_mm - 2; // At least 2mm margin
+    });
+  };
+
+  const calculateTransformation = () => {
+    if (!transformingMaterial || !selectedProductId || quantidadeRolos <= 0) {
+      return null;
+    }
+
+    const product = finishedProducts.find(p => p.id === selectedProductId);
+    if (!product) return null;
+
+    const pistas = Math.floor((transformingMaterial.largura_mm - 2) / product.largura_mm);
+    const metragemTotalProduto = quantidadeRolos * product.metragem_por_rolo_m;
+    const metragemBobinaTeorica = metragemTotalProduto / pistas;
+    const metragemBobinaComPerdas = metragemBobinaTeorica * 1.03; // 3% losses
+    const saldoSuficiente = metragemBobinaComPerdas <= transformingMaterial.saldo_m;
+    const eficiencia = ((product.largura_mm * pistas) / transformingMaterial.largura_mm) * 100;
+
+    return {
+      pistas,
+      metragemTotalProduto,
+      metragemBobinaTeorica,
+      metragemBobinaComPerdas,
+      saldoSuficiente,
+      eficiencia,
+      product,
+    };
+  };
+
+  const handleOpenTransformDialog = (material: RawMaterial) => {
+    setTransformingMaterial(material);
+    setSelectedProductId('');
+    setQuantidadeRolos(0);
+    setIsTransformDialogOpen(true);
+  };
+
+  const handleTransform = () => {
+    const calc = calculateTransformation();
+    if (!calc || !transformingMaterial) {
+      toast.error('Erro no cálculo');
+      return;
+    }
+    
+    if (!calc.saldoSuficiente) {
+      toast.error('Saldo de bobina insuficiente!');
+      return;
+    }
+
+    transformBobinaToProduct(
+      transformingMaterial.id, 
+      selectedProductId, 
+      quantidadeRolos, 
+      calc.metragemBobinaComPerdas
+    );
+
+    toast.success(`Produção concluída! ${quantidadeRolos} rolos adicionados ao estoque.`);
+    setIsTransformDialogOpen(false);
+  };
+
+  const transformCalc = calculateTransformation();
+  const compatibleProducts = transformingMaterial ? getCompatibleProducts(transformingMaterial) : [];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -161,10 +234,12 @@ export default function RawMaterials() {
           </h1>
           <p className="text-muted-foreground">Controle de estoque de bobinas</p>
         </div>
-        <Button onClick={() => handleOpenDialog()}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nova Bobina
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => handleOpenDialog()}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nova Bobina
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -242,6 +317,16 @@ export default function RawMaterials() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
+                      {material.estoque_status === 'em_estoque' && material.saldo_m > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenTransformDialog(material)}
+                          title="Produzir Produto Acabado"
+                        >
+                          <Factory className="h-4 w-4 text-primary" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
@@ -460,6 +545,122 @@ export default function RawMaterials() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Transform Dialog */}
+      <Dialog open={isTransformDialogOpen} onOpenChange={setIsTransformDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Factory className="h-5 w-5" />
+              Produzir Produto Acabado
+            </DialogTitle>
+          </DialogHeader>
+          
+          {transformingMaterial && (
+            <div className="space-y-4 py-4">
+              {/* Bobina Info */}
+              <div className="p-3 rounded-lg bg-muted/50 border">
+                <p className="text-sm text-muted-foreground">Bobina Selecionada</p>
+                <p className="font-medium">{transformingMaterial.nome}</p>
+                <p className="text-sm">
+                  Saldo: <span className="font-medium">{transformingMaterial.saldo_m}m</span> | 
+                  Largura: {transformingMaterial.largura_mm}mm
+                </p>
+              </div>
+
+              {/* Product Selection */}
+              <div className="space-y-2">
+                <Label>Produto Destino *</Label>
+                <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o produto..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {compatibleProducts.length === 0 ? (
+                      <SelectItem value="none" disabled>
+                        Nenhum produto compatível
+                      </SelectItem>
+                    ) : (
+                      compatibleProducts.map(p => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.nome} ({p.largura_mm}mm × {p.metragem_por_rolo_m}m)
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                {compatibleProducts.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Cadastre produtos com material {transformingMaterial.tipo}, acabamento {transformingMaterial.acabamento} e largura ≤{transformingMaterial.largura_mm - 2}mm
+                  </p>
+                )}
+              </div>
+
+              {/* Quantity */}
+              <div className="space-y-2">
+                <Label>Quantidade de Rolos</Label>
+                <Input
+                  type="number"
+                  value={quantidadeRolos || ''}
+                  onChange={(e) => setQuantidadeRolos(Number(e.target.value))}
+                  placeholder="Ex: 100"
+                />
+              </div>
+
+              {/* Calculation Result */}
+              {transformCalc && (
+                <div className={`p-4 rounded-lg border ${transformCalc.saldoSuficiente ? 'bg-status-success/5 border-status-success/30' : 'bg-status-error/5 border-status-error/30'}`}>
+                  <h4 className="font-medium mb-2 flex items-center gap-2">
+                    Cálculo de Aproveitamento
+                    {!transformCalc.saldoSuficiente && (
+                      <Badge variant="destructive">Saldo Insuficiente</Badge>
+                    )}
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Pistas:</span>{' '}
+                      <span className="font-medium">{transformCalc.pistas}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Eficiência:</span>{' '}
+                      <span className="font-medium">{transformCalc.eficiencia.toFixed(1)}%</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Metragem Produto:</span>{' '}
+                      <span className="font-medium">{transformCalc.metragemTotalProduto}m</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Bobina necessária:</span>{' '}
+                      <span className={`font-medium ${!transformCalc.saldoSuficiente ? 'text-status-error' : ''}`}>
+                        {transformCalc.metragemBobinaComPerdas.toFixed(1)}m
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-2 pt-2 border-t text-sm">
+                    <span className="text-muted-foreground">Saldo após produção:</span>{' '}
+                    <span className="font-medium">
+                      {(transformingMaterial.saldo_m - transformCalc.metragemBobinaComPerdas).toFixed(1)}m
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsTransformDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleTransform}
+              disabled={!transformCalc || !transformCalc.saldoSuficiente}
+            >
+              <Factory className="mr-2 h-4 w-4" />
+              Confirmar Produção
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { Quote, QuoteItem, QuoteStatus } from '@/types';
@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Plus, Search, FileText, ArrowRight, Trash2, Eye } from 'lucide-react';
+import { Plus, Search, FileText, ArrowRight, Trash2, Eye, UserCog } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -23,14 +23,30 @@ const statusColors: Record<QuoteStatus, string> = {
 
 export default function Quotes() {
   const navigate = useNavigate();
-  const { quotes, clients, finishedProducts, addQuote, updateQuote, addServiceOrder } = useApp();
+  const { quotes, clients, finishedProducts, sellers, getSellerByClientId, addQuote, updateQuote, addServiceOrder } = useApp();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'all'>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState('');
+  const [selectedSellerId, setSelectedSellerId] = useState('');
+  const [comissaoPercent, setComissaoPercent] = useState(0);
   const [items, setItems] = useState<Partial<QuoteItem>[]>([]);
   const [prazo, setPrazo] = useState(7);
   const [desconto, setDesconto] = useState(0);
+
+  // Auto-select seller when client changes
+  useEffect(() => {
+    if (selectedClientId) {
+      const seller = getSellerByClientId(selectedClientId);
+      if (seller) {
+        setSelectedSellerId(seller.id);
+        setComissaoPercent(seller.comissao_padrao_percent);
+      } else {
+        setSelectedSellerId('');
+        setComissaoPercent(0);
+      }
+    }
+  }, [selectedClientId, getSellerByClientId]);
 
   const filteredQuotes = quotes.filter(q => {
     const client = clients.find(c => c.id === q.cliente_id);
@@ -71,18 +87,28 @@ export default function Quotes() {
     return subtotal * (1 - desconto / 100);
   };
 
+  const calculateComissao = () => {
+    return calculateTotal() * (comissaoPercent / 100);
+  };
+
   const handleSave = () => {
     if (!selectedClientId || items.length === 0) {
       toast.error('Selecione um cliente e adicione itens');
       return;
     }
 
+    const seller = sellers.find(s => s.id === selectedSellerId);
+    const valorFinal = calculateTotal();
+
     const newQuote: Quote = {
       id: `orc-${Date.now()}`,
       numero: `ORC-${new Date().getFullYear()}-${String(quotes.length + 1).padStart(3, '0')}`,
       data: format(new Date(), 'yyyy-MM-dd'),
       cliente_id: selectedClientId,
-      vendedor_nome: 'Usuário Atual',
+      vendedor_nome: seller?.nome || 'Sem vendedor',
+      vendedor_id: selectedSellerId || undefined,
+      comissao_percent: comissaoPercent,
+      comissao_valor: valorFinal * (comissaoPercent / 100),
       itens: items.map((item, i) => {
         const product = finishedProducts.find(p => p.id === item.produto_acabado_id);
         return {
@@ -98,7 +124,7 @@ export default function Quotes() {
       prazo_entrega_dias: prazo,
       desconto,
       impostos: 0,
-      valor_final: calculateTotal(),
+      valor_final: valorFinal,
       status: 'rascunho',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -112,6 +138,8 @@ export default function Quotes() {
 
   const resetForm = () => {
     setSelectedClientId('');
+    setSelectedSellerId('');
+    setComissaoPercent(0);
     setItems([]);
     setPrazo(7);
     setDesconto(0);
@@ -251,15 +279,50 @@ export default function Quotes() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-2">
-                  <Label>Prazo (dias)</Label>
-                  <Input type="number" value={prazo} onChange={(e) => setPrazo(Number(e.target.value))} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Desconto (%)</Label>
-                  <Input type="number" value={desconto} onChange={(e) => setDesconto(Number(e.target.value))} />
-                </div>
+              <div className="space-y-2">
+                <Label>Vendedor</Label>
+                <Select value={selectedSellerId} onValueChange={(value) => {
+                  setSelectedSellerId(value);
+                  const seller = sellers.find(s => s.id === value);
+                  if (seller) setComissaoPercent(seller.comissao_padrao_percent);
+                }}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={selectedSellerId ? undefined : "Auto-selecionado"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sellers.filter(s => s.ativo).map(s => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.nome} ({s.comissao_padrao_percent}%)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedSellerId && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <UserCog className="h-4 w-4" />
+                    <span>Comissão: {comissaoPercent}%</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Prazo (dias)</Label>
+                <Input type="number" value={prazo} onChange={(e) => setPrazo(Number(e.target.value))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Desconto (%)</Label>
+                <Input type="number" value={desconto} onChange={(e) => setDesconto(Number(e.target.value))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Comissão (%)</Label>
+                <Input 
+                  type="number" 
+                  step="0.5"
+                  value={comissaoPercent} 
+                  onChange={(e) => setComissaoPercent(Number(e.target.value))} 
+                />
               </div>
             </div>
 
@@ -292,8 +355,14 @@ export default function Quotes() {
                   </div>
                 </div>
               ))}
-              <div className="text-right pt-3 border-t mt-3">
-                <span className="text-lg font-bold">Total: R$ {calculateTotal().toFixed(2)}</span>
+              <div className="text-right pt-3 border-t mt-3 space-y-1">
+                <div className="text-lg font-bold">Total: R$ {calculateTotal().toFixed(2)}</div>
+                {comissaoPercent > 0 && (
+                  <div className="text-sm text-muted-foreground flex items-center justify-end gap-1">
+                    <UserCog className="h-4 w-4" />
+                    Comissão: R$ {calculateComissao().toFixed(2)}
+                  </div>
+                )}
               </div>
             </div>
           </div>
