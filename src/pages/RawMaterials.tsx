@@ -1,228 +1,105 @@
 import { useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import { RawMaterial, MaterialType, Finishing, BaseColor, StockStatus, FinishedProduct } from '@/types';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '@/components/ui/table';
+import { RawProduct } from '@/types';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, Search, Package, AlertTriangle, Factory, ArrowRight } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Plus, Pencil, Trash2, Search, Package } from 'lucide-react';
 import { toast } from 'sonner';
 
-const emptyMaterial: Omit<RawMaterial, 'id' | 'created_at' | 'updated_at' | 'custo_por_m'> = {
-  nome: '',
-  tipo: 'couche',
-  acabamento: 'fosco',
-  cor_base: 'branco',
-  largura_mm: 0,
-  comprimento_m: 0,
-  gramatura: undefined,
-  lote: '',
-  fornecedor: '',
-  custo_total: 0,
-  estoque_status: 'em_estoque',
-  saldo_m: 0,
-  observacoes: '',
-};
-
-const statusColors: Record<StockStatus, string> = {
-  em_estoque: 'bg-status-success/20 text-status-success',
-  reservada: 'bg-status-warning/20 text-status-warning',
-  consumida: 'bg-muted text-muted-foreground',
-};
-
-const statusLabels: Record<StockStatus, string> = {
-  em_estoque: 'Em Estoque',
-  reservada: 'Reservada',
-  consumida: 'Consumida',
+const emptyRawProduct: Omit<RawProduct, 'id' | 'created_at' | 'updated_at'> = {
+  code: '',
+  name: '',
+  material_type: '',
+  width_mm: 0,
+  length_m: 0,
+  thickness_microns: 0,
+  usable_width_mm: 0,
+  waste_percentage: 0,
+  cost_per_meter: 0,
+  cost_per_kg: null,
+  supplier_name: '',
+  notes: '',
+  active: true,
 };
 
 export default function RawMaterials() {
-  const { rawMaterials, finishedProducts, addRawMaterial, updateRawMaterial, deleteRawMaterial, transformBobinaToProduct } = useApp();
+  const { rawProducts, addRawProduct, updateRawProduct, deleteRawProduct } = useApp();
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StockStatus | 'all'>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isTransformDialogOpen, setIsTransformDialogOpen] = useState(false);
-  const [editingMaterial, setEditingMaterial] = useState<RawMaterial | null>(null);
-  const [deletingMaterial, setDeletingMaterial] = useState<RawMaterial | null>(null);
-  const [transformingMaterial, setTransformingMaterial] = useState<RawMaterial | null>(null);
-  const [selectedProductId, setSelectedProductId] = useState('');
-  const [quantidadeRolos, setQuantidadeRolos] = useState(0);
-  const [formData, setFormData] = useState(emptyMaterial);
+  const [editingItem, setEditingItem] = useState<RawProduct | null>(null);
+  const [deletingItem, setDeletingItem] = useState<RawProduct | null>(null);
+  const [formData, setFormData] = useState(emptyRawProduct);
 
-  const filteredMaterials = rawMaterials.filter(material => {
-    const matchesSearch = material.nome.toLowerCase().includes(search.toLowerCase()) ||
-      material.lote.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || material.estoque_status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const filtered = rawProducts.filter((rp) =>
+    (rp.code?.toLowerCase() || '').includes(search.toLowerCase()) ||
+    (rp.name?.toLowerCase() || '').includes(search.toLowerCase()) ||
+    (rp.material_type?.toLowerCase() || '').includes(search.toLowerCase())
+  );
 
-  const handleOpenDialog = (material?: RawMaterial) => {
-    if (material) {
-      setEditingMaterial(material);
+  const handleOpenDialog = (item?: RawProduct) => {
+    if (item) {
+      setEditingItem(item);
       setFormData({
-        nome: material.nome,
-        tipo: material.tipo,
-        acabamento: material.acabamento,
-        cor_base: material.cor_base,
-        largura_mm: material.largura_mm,
-        comprimento_m: material.comprimento_m,
-        gramatura: material.gramatura,
-        lote: material.lote,
-        fornecedor: material.fornecedor,
-        custo_total: material.custo_total,
-        estoque_status: material.estoque_status,
-        saldo_m: material.saldo_m,
-        observacoes: material.observacoes,
+        code: item.code || '',
+        name: item.name || '',
+        material_type: item.material_type || '',
+        width_mm: item.width_mm || 0,
+        length_m: item.length_m || 0,
+        thickness_microns: item.thickness_microns || 0,
+        usable_width_mm: item.usable_width_mm || 0,
+        waste_percentage: item.waste_percentage || 0,
+        cost_per_meter: item.cost_per_meter || 0,
+        cost_per_kg: item.cost_per_kg ?? null,
+        supplier_name: item.supplier_name || '',
+        notes: item.notes || '',
+        active: item.active ?? true,
       });
     } else {
-      setEditingMaterial(null);
-      setFormData(emptyMaterial);
+      setEditingItem(null);
+      setFormData(emptyRawProduct);
     }
     setIsDialogOpen(true);
   };
 
-  const handleSave = () => {
-    if (!formData.nome || formData.largura_mm <= 0 || formData.comprimento_m <= 0) {
-      toast.error('Preencha os campos obrigatórios corretamente');
+  const handleSave = async () => {
+    if (!formData.name) {
+      toast.error('Preencha o nome da bobina/matéria-prima');
       return;
     }
 
-    const custo_por_m = formData.comprimento_m > 0 ? formData.custo_total / formData.comprimento_m : 0;
-
-    if (editingMaterial) {
-      updateRawMaterial(editingMaterial.id, { ...formData, custo_por_m });
-      toast.success('Bobina atualizada com sucesso!');
-    } else {
-      const newMaterial: RawMaterial = {
-        ...formData,
-        custo_por_m,
-        saldo_m: formData.saldo_m || formData.comprimento_m,
-        id: `bob-${Date.now()}`,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      addRawMaterial(newMaterial);
-      toast.success('Bobina cadastrada com sucesso!');
+    try {
+      if (editingItem) {
+        await updateRawProduct(editingItem.id, formData);
+        toast.success('Bobina atualizada com sucesso!');
+      } else {
+        await addRawProduct(formData);
+        toast.success('Bobina cadastrada com sucesso!');
+      }
+      setIsDialogOpen(false);
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao salvar bobina');
     }
-    setIsDialogOpen(false);
   };
 
-  const handleDelete = () => {
-    if (deletingMaterial) {
-      deleteRawMaterial(deletingMaterial.id);
+  const handleDelete = async () => {
+    if (!deletingItem) return;
+    try {
+      await deleteRawProduct(deletingItem.id);
       toast.success('Bobina excluída com sucesso!');
       setIsDeleteDialogOpen(false);
-      setDeletingMaterial(null);
+      setDeletingItem(null);
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao excluir bobina');
     }
   };
-
-  const isLowStock = (material: RawMaterial) => {
-    return material.saldo_m < material.comprimento_m * 0.3 && material.estoque_status !== 'consumida';
-  };
-
-  // Transformation calculations
-  const getCompatibleProducts = (bobina: RawMaterial) => {
-    return finishedProducts.filter(p => {
-      return p.material_requerido === bobina.tipo && 
-             p.acabamento === bobina.acabamento &&
-             p.cor_base === bobina.cor_base &&
-             p.largura_mm <= bobina.largura_mm - 2; // At least 2mm margin
-    });
-  };
-
-  const calculateTransformation = () => {
-    if (!transformingMaterial || !selectedProductId || quantidadeRolos <= 0) {
-      return null;
-    }
-
-    const product = finishedProducts.find(p => p.id === selectedProductId);
-    if (!product) return null;
-
-    const pistas = Math.floor((transformingMaterial.largura_mm - 2) / product.largura_mm);
-    const metragemTotalProduto = quantidadeRolos * product.metragem_por_rolo_m;
-    const metragemBobinaTeorica = metragemTotalProduto / pistas;
-    const metragemBobinaComPerdas = metragemBobinaTeorica * 1.03; // 3% losses
-    const saldoSuficiente = metragemBobinaComPerdas <= transformingMaterial.saldo_m;
-    const eficiencia = ((product.largura_mm * pistas) / transformingMaterial.largura_mm) * 100;
-
-    return {
-      pistas,
-      metragemTotalProduto,
-      metragemBobinaTeorica,
-      metragemBobinaComPerdas,
-      saldoSuficiente,
-      eficiencia,
-      product,
-    };
-  };
-
-  const handleOpenTransformDialog = (material: RawMaterial) => {
-    setTransformingMaterial(material);
-    setSelectedProductId('');
-    setQuantidadeRolos(0);
-    setIsTransformDialogOpen(true);
-  };
-
-  const handleTransform = () => {
-    const calc = calculateTransformation();
-    if (!calc || !transformingMaterial) {
-      toast.error('Erro no cálculo');
-      return;
-    }
-    
-    if (!calc.saldoSuficiente) {
-      toast.error('Saldo de bobina insuficiente!');
-      return;
-    }
-
-    transformBobinaToProduct(
-      transformingMaterial.id, 
-      selectedProductId, 
-      quantidadeRolos, 
-      calc.metragemBobinaComPerdas
-    );
-
-    toast.success(`Produção concluída! ${quantidadeRolos} rolos adicionados ao estoque.`);
-    setIsTransformDialogOpen(false);
-  };
-
-  const transformCalc = calculateTransformation();
-  const compatibleProducts = transformingMaterial ? getCompatibleProducts(transformingMaterial) : [];
 
   return (
     <div className="space-y-6">
@@ -230,115 +107,69 @@ export default function RawMaterials() {
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Package className="h-6 w-6" />
-            Bobinas (Matéria-prima)
+            Bobinas
           </h1>
-          <p className="text-muted-foreground">Controle de estoque de bobinas</p>
+          <p className="text-muted-foreground">Cadastro de produtos brutos / matéria-prima</p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => handleOpenDialog()}>
-            <Plus className="mr-2 h-4 w-4" />
-            Nova Bobina
-          </Button>
-        </div>
+        <Button onClick={() => handleOpenDialog()}>
+          <Plus className="mr-2 h-4 w-4" />
+          Nova Bobina
+        </Button>
       </div>
 
       <Card>
         <CardHeader className="pb-4">
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-4">
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nome ou lote..."
+                placeholder="Buscar por código, nome ou material..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-10"
               />
             </div>
-            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StockStatus | 'all')}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filtrar por status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os status</SelectItem>
-                <SelectItem value="em_estoque">Em Estoque</SelectItem>
-                <SelectItem value="reservada">Reservada</SelectItem>
-                <SelectItem value="consumida">Consumida</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-sm text-muted-foreground">
-              {filteredMaterials.length} bobina(s)
-            </p>
+            <p className="text-sm text-muted-foreground">{filtered.length} item(ns)</p>
           </div>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Código</TableHead>
                 <TableHead>Nome</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Largura</TableHead>
-                <TableHead>Saldo</TableHead>
-                <TableHead>Custo/m</TableHead>
+                <TableHead>Material</TableHead>
+                <TableHead className="text-right">Largura (mm)</TableHead>
+                <TableHead className="text-right">Custo/m</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredMaterials.length === 0 ? (
+              {filtered.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     Nenhuma bobina encontrada
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredMaterials.map((material) => (
-                  <TableRow key={material.id} className={isLowStock(material) ? 'bg-status-warning/5' : ''}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        {isLowStock(material) && (
-                          <AlertTriangle className="h-4 w-4 text-status-warning" />
-                        )}
-                        {material.nome}
-                      </div>
-                      <span className="text-xs text-muted-foreground">Lote: {material.lote}</span>
-                    </TableCell>
-                    <TableCell className="capitalize">{material.tipo}</TableCell>
-                    <TableCell>{material.largura_mm}mm</TableCell>
-                    <TableCell>
-                      <span className={isLowStock(material) ? 'text-status-warning font-medium' : ''}>
-                        {material.saldo_m}m
-                      </span>
-                      <span className="text-muted-foreground"> / {material.comprimento_m}m</span>
-                    </TableCell>
-                    <TableCell>R$ {material.custo_por_m.toFixed(2)}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={statusColors[material.estoque_status]}>
-                        {statusLabels[material.estoque_status]}
-                      </Badge>
-                    </TableCell>
+                filtered.map((rp) => (
+                  <TableRow key={rp.id}>
+                    <TableCell>{rp.code}</TableCell>
+                    <TableCell className="font-medium">{rp.name}</TableCell>
+                    <TableCell>{rp.material_type}</TableCell>
+                    <TableCell className="text-right">{rp.width_mm}</TableCell>
+                    <TableCell className="text-right">R$ {rp.cost_per_meter.toFixed(4)}</TableCell>
+                    <TableCell>{rp.active ? 'Ativo' : 'Inativo'}</TableCell>
                     <TableCell className="text-right">
-                      {material.estoque_status === 'em_estoque' && material.saldo_m > 0 && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenTransformDialog(material)}
-                          title="Produzir Produto Acabado"
-                        >
-                          <Factory className="h-4 w-4 text-primary" />
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenDialog(material)}
-                      >
+                      <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(rp)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => {
-                          setDeletingMaterial(material);
+                          setDeletingItem(rp);
                           setIsDeleteDialogOpen(true);
                         }}
                       >
@@ -353,187 +184,144 @@ export default function RawMaterials() {
         </CardContent>
       </Card>
 
-      {/* Form Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              {editingMaterial ? 'Editar Bobina' : 'Nova Bobina'}
-            </DialogTitle>
+            <DialogTitle>{editingItem ? 'Editar Bobina' : 'Nova Bobina'}</DialogTitle>
           </DialogHeader>
+
           <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="nome">Nome *</Label>
-              <Input
-                id="nome"
-                value={formData.nome}
-                onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                placeholder="Ex: Bobina Couche 107mm 1000m"
-              />
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>Tipo *</Label>
-                <Select 
-                  value={formData.tipo} 
-                  onValueChange={(v) => setFormData({ ...formData, tipo: v as MaterialType })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="couche">Couche</SelectItem>
-                    <SelectItem value="termica">Térmica</SelectItem>
-                    <SelectItem value="nylon">Nylon</SelectItem>
-                    <SelectItem value="outro">Outro</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Acabamento</Label>
-                <Select 
-                  value={formData.acabamento} 
-                  onValueChange={(v) => setFormData({ ...formData, acabamento: v as Finishing })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="fosco">Fosco</SelectItem>
-                    <SelectItem value="brilho">Brilho</SelectItem>
-                    <SelectItem value="outro">Outro</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Cor Base</Label>
-                <Select 
-                  value={formData.cor_base} 
-                  onValueChange={(v) => setFormData({ ...formData, cor_base: v as BaseColor })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="branco">Branco</SelectItem>
-                    <SelectItem value="transparente">Transparente</SelectItem>
-                    <SelectItem value="outro">Outro</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="largura_mm">Largura (mm) *</Label>
-                <Input
-                  id="largura_mm"
-                  type="number"
-                  value={formData.largura_mm || ''}
-                  onChange={(e) => setFormData({ ...formData, largura_mm: Number(e.target.value) })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="comprimento_m">Comprimento (m) *</Label>
-                <Input
-                  id="comprimento_m"
-                  type="number"
-                  value={formData.comprimento_m || ''}
-                  onChange={(e) => setFormData({ ...formData, comprimento_m: Number(e.target.value) })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="gramatura">Gramatura (g/m²)</Label>
-                <Input
-                  id="gramatura"
-                  type="number"
-                  value={formData.gramatura || ''}
-                  onChange={(e) => setFormData({ ...formData, gramatura: Number(e.target.value) || undefined })}
-                />
-              </div>
-            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="lote">Lote</Label>
+                <Label htmlFor="code">Código interno</Label>
+                <Input id="code" value={formData.code} onChange={(e) => setFormData({ ...formData, code: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="name">Nome *</Label>
+                <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="material_type">Tipo de material</Label>
                 <Input
-                  id="lote"
-                  value={formData.lote}
-                  onChange={(e) => setFormData({ ...formData, lote: e.target.value })}
+                  id="material_type"
+                  value={formData.material_type}
+                  onChange={(e) => setFormData({ ...formData, material_type: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="fornecedor">Fornecedor</Label>
+                <Label htmlFor="supplier_name">Fornecedor</Label>
                 <Input
-                  id="fornecedor"
-                  value={formData.fornecedor}
-                  onChange={(e) => setFormData({ ...formData, fornecedor: e.target.value })}
+                  id="supplier_name"
+                  value={formData.supplier_name}
+                  onChange={(e) => setFormData({ ...formData, supplier_name: e.target.value })}
                 />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+
+            <div className="grid grid-cols-4 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="custo_total">Custo Total (R$)</Label>
+                <Label htmlFor="width_mm">Largura (mm)</Label>
                 <Input
-                  id="custo_total"
+                  id="width_mm"
                   type="number"
                   step="0.01"
-                  value={formData.custo_total || ''}
-                  onChange={(e) => setFormData({ ...formData, custo_total: Number(e.target.value) })}
+                  value={formData.width_mm}
+                  onChange={(e) => setFormData({ ...formData, width_mm: Number(e.target.value) })}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="saldo_m">Saldo Atual (m)</Label>
+                <Label htmlFor="length_m">Comprimento (m)</Label>
                 <Input
-                  id="saldo_m"
+                  id="length_m"
                   type="number"
-                  value={formData.saldo_m || ''}
-                  onChange={(e) => setFormData({ ...formData, saldo_m: Number(e.target.value) })}
+                  step="0.01"
+                  value={formData.length_m}
+                  onChange={(e) => setFormData({ ...formData, length_m: Number(e.target.value) })}
                 />
               </div>
               <div className="space-y-2">
-                <Label>Status</Label>
-                <Select 
-                  value={formData.estoque_status} 
-                  onValueChange={(v) => setFormData({ ...formData, estoque_status: v as StockStatus })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="em_estoque">Em Estoque</SelectItem>
-                    <SelectItem value="reservada">Reservada</SelectItem>
-                    <SelectItem value="consumida">Consumida</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="thickness_microns">Espessura (microns)</Label>
+                <Input
+                  id="thickness_microns"
+                  type="number"
+                  step="0.01"
+                  value={formData.thickness_microns}
+                  onChange={(e) => setFormData({ ...formData, thickness_microns: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="usable_width_mm">Largura útil (mm)</Label>
+                <Input
+                  id="usable_width_mm"
+                  type="number"
+                  step="0.01"
+                  value={formData.usable_width_mm}
+                  onChange={(e) => setFormData({ ...formData, usable_width_mm: Number(e.target.value) })}
+                />
               </div>
             </div>
+
+            <div className="grid grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="waste_percentage">Perda (%)</Label>
+                <Input
+                  id="waste_percentage"
+                  type="number"
+                  step="0.01"
+                  value={formData.waste_percentage}
+                  onChange={(e) => setFormData({ ...formData, waste_percentage: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cost_per_meter">Custo por metro</Label>
+                <Input
+                  id="cost_per_meter"
+                  type="number"
+                  step="0.0001"
+                  value={formData.cost_per_meter}
+                  onChange={(e) => setFormData({ ...formData, cost_per_meter: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cost_per_kg">Custo por kg (opcional)</Label>
+                <Input
+                  id="cost_per_kg"
+                  type="number"
+                  step="0.0001"
+                  value={formData.cost_per_kg ?? ''}
+                  onChange={(e) => setFormData({ ...formData, cost_per_kg: e.target.value === '' ? null : Number(e.target.value) })}
+                />
+              </div>
+              <div className="flex items-center gap-2 pt-8">
+                <Switch checked={formData.active} onCheckedChange={(checked) => setFormData({ ...formData, active: checked })} />
+                <Label>Ativo</Label>
+              </div>
+            </div>
+
             <div className="space-y-2">
-              <Label htmlFor="observacoes">Observações</Label>
-              <Textarea
-                id="observacoes"
-                value={formData.observacoes}
-                onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
-                rows={3}
-              />
+              <Label htmlFor="notes">Observações</Label>
+              <Textarea id="notes" value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} rows={3} />
             </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSave}>
-              {editingMaterial ? 'Salvar' : 'Cadastrar'}
-            </Button>
+            <Button onClick={handleSave}>{editingItem ? 'Salvar' : 'Cadastrar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja excluir a bobina "{deletingMaterial?.nome}"?
+              Tem certeza que deseja excluir a bobina "{deletingItem?.name}"?
               Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -545,122 +333,6 @@ export default function RawMaterials() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Transform Dialog */}
-      <Dialog open={isTransformDialogOpen} onOpenChange={setIsTransformDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Factory className="h-5 w-5" />
-              Produzir Produto Acabado
-            </DialogTitle>
-          </DialogHeader>
-          
-          {transformingMaterial && (
-            <div className="space-y-4 py-4">
-              {/* Bobina Info */}
-              <div className="p-3 rounded-lg bg-muted/50 border">
-                <p className="text-sm text-muted-foreground">Bobina Selecionada</p>
-                <p className="font-medium">{transformingMaterial.nome}</p>
-                <p className="text-sm">
-                  Saldo: <span className="font-medium">{transformingMaterial.saldo_m}m</span> | 
-                  Largura: {transformingMaterial.largura_mm}mm
-                </p>
-              </div>
-
-              {/* Product Selection */}
-              <div className="space-y-2">
-                <Label>Produto Destino *</Label>
-                <Select value={selectedProductId} onValueChange={setSelectedProductId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o produto..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {compatibleProducts.length === 0 ? (
-                      <SelectItem value="none" disabled>
-                        Nenhum produto compatível
-                      </SelectItem>
-                    ) : (
-                      compatibleProducts.map(p => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.nome} ({p.largura_mm}mm × {p.metragem_por_rolo_m}m)
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-                {compatibleProducts.length === 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    Cadastre produtos com material {transformingMaterial.tipo}, acabamento {transformingMaterial.acabamento} e largura ≤{transformingMaterial.largura_mm - 2}mm
-                  </p>
-                )}
-              </div>
-
-              {/* Quantity */}
-              <div className="space-y-2">
-                <Label>Quantidade de Rolos</Label>
-                <Input
-                  type="number"
-                  value={quantidadeRolos || ''}
-                  onChange={(e) => setQuantidadeRolos(Number(e.target.value))}
-                  placeholder="Ex: 100"
-                />
-              </div>
-
-              {/* Calculation Result */}
-              {transformCalc && (
-                <div className={`p-4 rounded-lg border ${transformCalc.saldoSuficiente ? 'bg-status-success/5 border-status-success/30' : 'bg-status-error/5 border-status-error/30'}`}>
-                  <h4 className="font-medium mb-2 flex items-center gap-2">
-                    Cálculo de Aproveitamento
-                    {!transformCalc.saldoSuficiente && (
-                      <Badge variant="destructive">Saldo Insuficiente</Badge>
-                    )}
-                  </h4>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Pistas:</span>{' '}
-                      <span className="font-medium">{transformCalc.pistas}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Eficiência:</span>{' '}
-                      <span className="font-medium">{transformCalc.eficiencia.toFixed(1)}%</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Metragem Produto:</span>{' '}
-                      <span className="font-medium">{transformCalc.metragemTotalProduto}m</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Bobina necessária:</span>{' '}
-                      <span className={`font-medium ${!transformCalc.saldoSuficiente ? 'text-status-error' : ''}`}>
-                        {transformCalc.metragemBobinaComPerdas.toFixed(1)}m
-                      </span>
-                    </div>
-                  </div>
-                  <div className="mt-2 pt-2 border-t text-sm">
-                    <span className="text-muted-foreground">Saldo após produção:</span>{' '}
-                    <span className="font-medium">
-                      {(transformingMaterial.saldo_m - transformCalc.metragemBobinaComPerdas).toFixed(1)}m
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsTransformDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button 
-              onClick={handleTransform}
-              disabled={!transformCalc || !transformCalc.saldoSuficiente}
-            >
-              <Factory className="mr-2 h-4 w-4" />
-              Confirmar Produção
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

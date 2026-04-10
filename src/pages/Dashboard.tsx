@@ -194,7 +194,7 @@ export default function Dashboard() {
                     >
                       <div>
                         <p className="font-medium">{os.numero_os}</p>
-                        <p className="text-sm text-muted-foreground">{client?.nome_fantasia}</p>
+                        <p className="text-sm text-muted-foreground">{client?.trade_name}</p>
                       </div>
                       <div className="text-right">
                         <Badge variant="destructive">
@@ -241,7 +241,7 @@ export default function Dashboard() {
                     >
                       <div>
                         <p className="font-medium">{os.numero_os}</p>
-                        <p className="text-sm text-muted-foreground">{client?.nome_fantasia} - {os.nome_pedido}</p>
+                        <p className="text-sm text-muted-foreground">{client?.trade_name} - {os.nome_pedido}</p>
                       </div>
                       <Badge variant="outline">{column?.title}</Badge>
                     </Link>

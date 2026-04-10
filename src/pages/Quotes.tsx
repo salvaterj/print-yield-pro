@@ -1,204 +1,292 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { Quote, QuoteItem, QuoteStatus } from '@/types';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Plus, Search, FileText, ArrowRight, Trash2, Eye, UserCog } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Plus, Pencil, Trash2, Search, FileText, Eye } from 'lucide-react';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
 
-const statusColors: Record<QuoteStatus, string> = {
-  rascunho: 'bg-muted text-muted-foreground',
-  enviado: 'bg-status-info/20 text-status-info',
-  aprovado: 'bg-status-success/20 text-status-success',
-  perdido: 'bg-status-error/20 text-status-error',
+const quoteStatusOptions: Array<{ value: QuoteStatus; label: string }> = [
+  { value: 'draft', label: 'Rascunho' },
+  { value: 'approved', label: 'Aprovado' },
+  { value: 'rejected', label: 'Rejeitado' },
+  { value: 'canceled', label: 'Cancelado' },
+];
+
+const emptyQuote: Omit<Quote, 'id' | 'created_at' | 'updated_at'> = {
+  quote_number: '',
+  company_id: '',
+  salesperson_id: null,
+  carrier_id: null,
+  status: 'draft',
+  issue_date: new Date().toISOString().slice(0, 10),
+  valid_until: new Date().toISOString().slice(0, 10),
+  notes: '',
+};
+
+const emptyQuoteItem: Omit<QuoteItem, 'id' | 'created_at' | 'updated_at'> = {
+  quote_id: '',
+  finished_product_id: null,
+  raw_product_id: null,
+  description: '',
+  quantity: 0,
+  width_mm: 0,
+  height_mm: 0,
+  units_per_row: 0,
+  units_per_meter: 0,
+  material_used_meters: 0,
+  waste_meters: 0,
+  total_cost: 0,
+  unit_cost: 0,
+  sale_price: 0,
+  total_price: 0,
+  profit_margin: 0,
+  technical_notes: '',
 };
 
 export default function Quotes() {
-  const navigate = useNavigate();
-  const { quotes, clients, finishedProducts, sellers, getSellerByClientId, addQuote, updateQuote, addServiceOrder } = useApp();
+  const {
+    systemSettings,
+    companies,
+    carriers,
+    salespeople,
+    finishedProducts,
+    rawProducts,
+    quotes,
+    quoteItems,
+    addQuote,
+    updateQuote,
+    deleteQuote,
+    addQuoteItem,
+    updateQuoteItem,
+    deleteQuoteItem,
+  } = useApp();
+
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | QuoteStatus>('all');
+  const [companyFilter, setCompanyFilter] = useState<'all' | string>('all');
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedClientId, setSelectedClientId] = useState('');
-  const [selectedSellerId, setSelectedSellerId] = useState('');
-  const [comissaoPercent, setComissaoPercent] = useState(0);
-  const [items, setItems] = useState<Partial<QuoteItem>[]>([]);
-  const [prazo, setPrazo] = useState(7);
-  const [desconto, setDesconto] = useState(0);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
+  const [deletingQuote, setDeletingQuote] = useState<Quote | null>(null);
+  const [formData, setFormData] = useState(emptyQuote);
 
-  // Auto-select seller when client changes
-  useEffect(() => {
-    if (selectedClientId) {
-      const seller = getSellerByClientId(selectedClientId);
-      if (seller) {
-        setSelectedSellerId(seller.id);
-        setComissaoPercent(seller.comissao_padrao_percent);
-      } else {
-        setSelectedSellerId('');
-        setComissaoPercent(0);
-      }
-    }
-  }, [selectedClientId, getSellerByClientId]);
+  const [isItemDialogOpen, setIsItemDialogOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<QuoteItem | null>(null);
+  const [itemFormData, setItemFormData] = useState(emptyQuoteItem);
 
-  const filteredQuotes = quotes.filter(q => {
-    const client = clients.find(c => c.id === q.cliente_id);
-    const matchesSearch = q.numero.toLowerCase().includes(search.toLowerCase()) ||
-      client?.nome_fantasia.toLowerCase().includes(search.toLowerCase());
+  const companyOptions = useMemo(() => companies.filter((c) => c.active), [companies]);
+  const carrierOptions = useMemo(() => carriers.filter((c) => c.active), [carriers]);
+  const salespersonOptions = useMemo(() => salespeople.filter((s) => s.active), [salespeople]);
+  const finishedProductOptions = useMemo(() => finishedProducts.filter((fp) => fp.active), [finishedProducts]);
+  const rawProductOptions = useMemo(() => rawProducts.filter((rp) => rp.active), [rawProducts]);
+
+  const getCompanyLabel = (id: string) => {
+    const c = companies.find((x) => x.id === id);
+    if (!c) return '';
+    return c.code ? `${c.code} - ${c.trade_name}` : c.trade_name;
+  };
+
+  const getSalespersonLabel = (id: string | null) => {
+    if (!id) return '-';
+    const s = salespeople.find((x) => x.id === id);
+    if (!s) return '-';
+    return s.code ? `${s.code} - ${s.name}` : s.name;
+  };
+
+  const getCarrierLabel = (id: string | null) => {
+    if (!id) return '-';
+    const c = carriers.find((x) => x.id === id);
+    if (!c) return '-';
+    return c.code ? `${c.code} - ${c.name}` : c.name;
+  };
+
+  const getFinishedProductLabel = (id: string | null) => {
+    if (!id) return '-';
+    const fp = finishedProducts.find((x) => x.id === id);
+    if (!fp) return '-';
+    return fp.code ? `${fp.code} - ${fp.name}` : fp.name;
+  };
+
+  const getRawProductLabel = (id: string | null) => {
+    if (!id) return '-';
+    const rp = rawProducts.find((x) => x.id === id);
+    if (!rp) return '-';
+    return rp.code ? `${rp.code} - ${rp.name}` : rp.name;
+  };
+
+  const getStatusLabel = (status: QuoteStatus) => quoteStatusOptions.find((o) => o.value === status)?.label || status;
+
+  const quoteTotal = (quoteId: string) =>
+    quoteItems
+      .filter((qi) => qi.quote_id === quoteId)
+      .reduce((sum, qi) => sum + (qi.total_price || 0), 0);
+
+  const filteredQuotes = quotes.filter((q) => {
+    const company = companies.find((c) => c.id === q.company_id);
+    const matchesSearch =
+      (q.quote_number?.toLowerCase() || '').includes(search.toLowerCase()) ||
+      (company?.trade_name?.toLowerCase() || '').includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'all' || q.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesCompany = companyFilter === 'all' || q.company_id === companyFilter;
+    return matchesSearch && matchesStatus && matchesCompany;
   });
 
-  const handleAddItem = () => {
-    setItems([...items, { produto_acabado_id: '', qtd_rolos: 1, valor_unit: 0 }]);
-  };
-
-  const handleRemoveItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index));
-  };
-
-  const handleItemChange = (index: number, field: string, value: any) => {
-    const newItems = [...items];
-    newItems[index] = { ...newItems[index], [field]: value };
-    
-    if (field === 'produto_acabado_id') {
-      const product = finishedProducts.find(p => p.id === value);
-      if (product) {
-        newItems[index].valor_unit = product.preco_base || 0;
-        newItems[index].descricao = product.nome;
-      }
+  const handleOpenDialog = (quote?: Quote) => {
+    if (quote) {
+      setEditingQuote(quote);
+      setFormData({
+        quote_number: quote.quote_number,
+        company_id: quote.company_id,
+        salesperson_id: quote.salesperson_id,
+        carrier_id: quote.carrier_id,
+        status: quote.status,
+        issue_date: quote.issue_date,
+        valid_until: quote.valid_until,
+        notes: quote.notes,
+      });
+    } else {
+      const issue = new Date().toISOString().slice(0, 10);
+      const validDays = systemSettings.default_quote_validity_days || 0;
+      const validUntil = validDays
+        ? new Date(Date.now() + validDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+        : issue;
+      setEditingQuote(null);
+      setFormData({ ...emptyQuote, issue_date: issue, valid_until: validUntil });
     }
-    setItems(newItems);
+    setIsDialogOpen(true);
   };
 
-  const calculateTotal = () => {
-    const subtotal = items.reduce((sum, item) => {
-      const product = finishedProducts.find(p => p.id === item.produto_acabado_id);
-      const metragem = (product?.metragem_por_rolo_m || 0) * (item.qtd_rolos || 0);
-      return sum + (item.valor_unit || 0) * (item.qtd_rolos || 0);
-    }, 0);
-    return subtotal * (1 - desconto / 100);
-  };
-
-  const calculateComissao = () => {
-    return calculateTotal() * (comissaoPercent / 100);
-  };
-
-  const handleSave = () => {
-    if (!selectedClientId || items.length === 0) {
-      toast.error('Selecione um cliente e adicione itens');
+  const handleSave = async () => {
+    if (!formData.company_id) {
+      toast.error('Selecione o cliente');
       return;
     }
 
-    const seller = sellers.find(s => s.id === selectedSellerId);
-    const valorFinal = calculateTotal();
+    try {
+      if (editingQuote) {
+        await updateQuote(editingQuote.id, formData);
+        toast.success('Orçamento atualizado!');
+        setIsDialogOpen(false);
+        return;
+      }
 
-    const newQuote: Quote = {
-      id: `orc-${Date.now()}`,
-      numero: `ORC-${new Date().getFullYear()}-${String(quotes.length + 1).padStart(3, '0')}`,
-      data: format(new Date(), 'yyyy-MM-dd'),
-      cliente_id: selectedClientId,
-      vendedor_nome: seller?.nome || 'Sem vendedor',
-      vendedor_id: selectedSellerId || undefined,
-      comissao_percent: comissaoPercent,
-      comissao_valor: valorFinal * (comissaoPercent / 100),
-      itens: items.map((item, i) => {
-        const product = finishedProducts.find(p => p.id === item.produto_acabado_id);
-        return {
-          id: `item-${Date.now()}-${i}`,
-          produto_acabado_id: item.produto_acabado_id!,
-          descricao: item.descricao || product?.nome || '',
-          qtd_rolos: item.qtd_rolos || 0,
-          metragem_total_m: (product?.metragem_por_rolo_m || 0) * (item.qtd_rolos || 0),
-          valor_unit: item.valor_unit || 0,
-          valor_total: (item.valor_unit || 0) * (item.qtd_rolos || 0),
-        };
-      }),
-      prazo_entrega_dias: prazo,
-      desconto,
-      impostos: 0,
-      valor_final: valorFinal,
-      status: 'rascunho',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    addQuote(newQuote);
-    toast.success('Orçamento criado!');
-    setIsDialogOpen(false);
-    resetForm();
+      const quoteNumber = formData.quote_number?.trim() || `Q-${Date.now()}`;
+      const created = await addQuote({ ...formData, quote_number: quoteNumber });
+      setEditingQuote(created);
+      toast.success('Orçamento criado! Agora adicione os itens.');
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao salvar orçamento');
+    }
   };
 
-  const resetForm = () => {
-    setSelectedClientId('');
-    setSelectedSellerId('');
-    setComissaoPercent(0);
-    setItems([]);
-    setPrazo(7);
-    setDesconto(0);
+  const handleDelete = async () => {
+    if (!deletingQuote) return;
+    try {
+      await deleteQuote(deletingQuote.id);
+      toast.success('Orçamento excluído!');
+      setIsDeleteDialogOpen(false);
+      setDeletingQuote(null);
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao excluir orçamento');
+    }
   };
 
-  const handleConvertToOS = (quote: Quote) => {
-    const client = clients.find(c => c.id === quote.cliente_id);
-    const firstItem = quote.itens[0];
-    const product = finishedProducts.find(p => p.id === firstItem?.produto_acabado_id);
+  const quoteItemsForEditing = editingQuote ? quoteItems.filter((qi) => qi.quote_id === editingQuote.id) : [];
 
-    const newOS = {
-      id: `os-${Date.now()}`,
-      numero_os: `OS-${new Date().getFullYear()}-${String(Date.now()).slice(-3)}`,
-      cliente_id: quote.cliente_id,
-      vendedor_nome: quote.vendedor_nome,
-      impressor_nome: '',
-      data_entrada: format(new Date(), 'yyyy-MM-dd'),
-      prazo_saida_ate: format(new Date(Date.now() + (quote.prazo_entrega_dias || 7) * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
-      nome_pedido: firstItem?.descricao || 'Pedido',
-      faca_01: product?.faca_01 || 'reta',
-      medida_material_mm: product ? `${product.largura_mm}x${product.altura_mm}` : '',
-      material: product ? `${product.cor_base} ${product.acabamento}/${product.material_requerido}` : '',
-      amostra: '',
-      pantone_01: product?.pantone_1 || '',
-      pantone_02: product?.pantone_2 || '',
-      pantone_03: product?.pantone_3 || '',
-      anilox_01: product?.anilox_1 || '',
-      anilox_02: product?.anilox_2 || '',
-      anilox_03: product?.anilox_3 || '',
-      chapado: product?.chapado || false,
-      impressao_m: firstItem?.metragem_total_m || 0,
-      rebobinagem_m: firstItem?.metragem_total_m || 0,
-      quantidade_rolos: firstItem?.qtd_rolos || 0,
-      quantidade_caixa: Math.ceil((firstItem?.qtd_rolos || 0) / 10),
-      usar_caixa: '',
-      observacoes_producao: `Convertido do orçamento ${quote.numero}`,
-      status_producao: 'criado' as const,
-      qualidade_ok: false,
-      logs: [{ id: `log-${Date.now()}`, timestamp: new Date().toISOString(), usuario: 'Sistema', acao: 'OS Criada', detalhes: `Convertida do orçamento ${quote.numero}` }],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+  const handleOpenItemDialog = (item?: QuoteItem) => {
+    if (!editingQuote) {
+      toast.error('Salve o orçamento antes de adicionar itens');
+      return;
+    }
 
-    addServiceOrder(newOS);
-    updateQuote(quote.id, { status: 'aprovado' });
-    toast.success('Orçamento convertido em OS!');
+    if (item) {
+      setEditingItem(item);
+      setItemFormData({
+        quote_id: item.quote_id,
+        finished_product_id: item.finished_product_id,
+        raw_product_id: item.raw_product_id,
+        description: item.description || '',
+        quantity: item.quantity || 0,
+        width_mm: item.width_mm || 0,
+        height_mm: item.height_mm || 0,
+        units_per_row: item.units_per_row || 0,
+        units_per_meter: item.units_per_meter || 0,
+        material_used_meters: item.material_used_meters || 0,
+        waste_meters: item.waste_meters || 0,
+        total_cost: item.total_cost || 0,
+        unit_cost: item.unit_cost || 0,
+        sale_price: item.sale_price || 0,
+        total_price: item.total_price || 0,
+        profit_margin: item.profit_margin || 0,
+        technical_notes: item.technical_notes || '',
+      });
+    } else {
+      setEditingItem(null);
+      setItemFormData({ ...emptyQuoteItem, quote_id: editingQuote.id });
+    }
+    setIsItemDialogOpen(true);
+  };
+
+  const syncTotalPrice = (next: typeof itemFormData) => {
+    const total = (next.quantity || 0) * (next.sale_price || 0);
+    return { ...next, total_price: Number.isFinite(total) ? total : 0 };
+  };
+
+  const handleSaveItem = async () => {
+    if (!editingQuote) return;
+
+    try {
+      if (editingItem) {
+        await updateQuoteItem(editingItem.id, itemFormData);
+        toast.success('Item atualizado!');
+      } else {
+        await addQuoteItem(itemFormData);
+        toast.success('Item adicionado!');
+      }
+      setIsItemDialogOpen(false);
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao salvar item');
+    }
+  };
+
+  const handleDeleteItem = async (id: string) => {
+    try {
+      await deleteQuoteItem(id);
+      toast.success('Item removido!');
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao remover item');
+    }
+  };
+
+  const badgeVariant = (status: QuoteStatus) => {
+    if (status === 'approved') return 'default';
+    if (status === 'rejected') return 'destructive';
+    if (status === 'canceled') return 'secondary';
+    return 'outline';
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <FileText className="h-6 w-6" />
             Orçamentos
           </h1>
-          <p className="text-muted-foreground">Gerencie os orçamentos</p>
+          <p className="text-muted-foreground">Crie e gerencie orçamentos</p>
         </div>
-        <Button onClick={() => setIsDialogOpen(true)}>
+        <Button onClick={() => handleOpenDialog()}>
           <Plus className="mr-2 h-4 w-4" />
           Novo Orçamento
         </Button>
@@ -209,18 +297,44 @@ export default function Quotes() {
           <div className="flex flex-wrap items-center gap-4">
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Buscar..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+              <Input
+                placeholder="Buscar por número ou cliente..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10"
+              />
             </div>
-            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as QuoteStatus | 'all')}>
-              <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="rascunho">Rascunho</SelectItem>
-                <SelectItem value="enviado">Enviado</SelectItem>
-                <SelectItem value="aprovado">Aprovado</SelectItem>
-                <SelectItem value="perdido">Perdido</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="w-[220px]">
+              <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {quoteStatusOptions.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-[260px]">
+              <Select value={companyFilter} onValueChange={(v) => setCompanyFilter(v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Cliente" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {companyOptions.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {getCompanyLabel(c.id)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-sm text-muted-foreground">{filteredQuotes.length} orçamento(s)</p>
           </div>
         </CardHeader>
         <CardContent>
@@ -229,149 +343,464 @@ export default function Quotes() {
               <TableRow>
                 <TableHead>Número</TableHead>
                 <TableHead>Cliente</TableHead>
-                <TableHead>Data</TableHead>
-                <TableHead>Valor</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Emissão</TableHead>
+                <TableHead>Validade</TableHead>
+                <TableHead className="text-right">Total</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredQuotes.map((quote) => {
-                const client = clients.find(c => c.id === quote.cliente_id);
-                return (
-                  <TableRow key={quote.id}>
-                    <TableCell className="font-medium">{quote.numero}</TableCell>
-                    <TableCell>{client?.nome_fantasia}</TableCell>
-                    <TableCell>{format(new Date(quote.data), 'dd/MM/yyyy')}</TableCell>
-                    <TableCell>R$ {quote.valor_final.toFixed(2)}</TableCell>
-                    <TableCell>
-                      <Badge className={statusColors[quote.status]}>{quote.status}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Button size="sm" variant="ghost" onClick={() => navigate(`/orcamentos/${quote.id}`)}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      {quote.status !== 'aprovado' && quote.status !== 'perdido' && (
-                        <Button size="sm" onClick={() => handleConvertToOS(quote)}>
-                          Converter em OS <ArrowRight className="ml-1 h-4 w-4" />
+              {filteredQuotes.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    Nenhum orçamento encontrado
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredQuotes.map((q) => {
+                  const company = companies.find((c) => c.id === q.company_id);
+                  return (
+                    <TableRow key={q.id}>
+                      <TableCell className="font-medium">{q.quote_number}</TableCell>
+                      <TableCell>{company?.trade_name}</TableCell>
+                      <TableCell>
+                        <Badge variant={badgeVariant(q.status)}>{getStatusLabel(q.status)}</Badge>
+                      </TableCell>
+                      <TableCell>{q.issue_date || '-'}</TableCell>
+                      <TableCell>{q.valid_until || '-'}</TableCell>
+                      <TableCell className="text-right">R$ {quoteTotal(q.id).toFixed(2)}</TableCell>
+                      <TableCell className="text-right">
+                        <Button asChild variant="ghost" size="icon">
+                          <Link to={`/orcamentos/${q.id}`}>
+                            <Eye className="h-4 w-4" />
+                          </Link>
                         </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+                        <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(q)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setDeletingQuote(q);
+                            setIsDeleteDialogOpen(true);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Novo Orçamento</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingQuote ? 'Editar Orçamento' : 'Novo Orçamento'}</DialogTitle>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label>Cliente *</Label>
-                <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                  <SelectContent>
-                    {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.nome_fantasia}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="quote_number">Número do orçamento</Label>
+                <Input
+                  id="quote_number"
+                  value={formData.quote_number}
+                  onChange={(e) => setFormData({ ...formData, quote_number: e.target.value })}
+                  placeholder="Ex: ORC-0001"
+                />
               </div>
               <div className="space-y-2">
-                <Label>Vendedor</Label>
-                <Select value={selectedSellerId} onValueChange={(value) => {
-                  setSelectedSellerId(value);
-                  const seller = sellers.find(s => s.id === value);
-                  if (seller) setComissaoPercent(seller.comissao_padrao_percent);
-                }}>
+                <Label>Status</Label>
+                <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v as QuoteStatus })}>
                   <SelectTrigger>
-                    <SelectValue placeholder={selectedSellerId ? undefined : "Auto-selecionado"} />
+                    <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {sellers.filter(s => s.ativo).map(s => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.nome} ({s.comissao_padrao_percent}%)
+                    {quoteStatusOptions.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {selectedSellerId && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <UserCog className="h-4 w-4" />
-                    <span>Comissão: {comissaoPercent}%</span>
-                  </div>
-                )}
+              </div>
+              <div className="space-y-2">
+                <Label>Cliente *</Label>
+                <Select value={formData.company_id || 'none'} onValueChange={(v) => setFormData({ ...formData, company_id: v === 'none' ? '' : v })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Selecione...</SelectItem>
+                    {companyOptions.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {getCompanyLabel(c.id)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label>Prazo (dias)</Label>
-                <Input type="number" value={prazo} onChange={(e) => setPrazo(Number(e.target.value))} />
+                <Label>Vendedor</Label>
+                <Select
+                  value={formData.salesperson_id || 'none'}
+                  onValueChange={(v) => setFormData({ ...formData, salesperson_id: v === 'none' ? null : v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhum</SelectItem>
+                    {salespersonOptions.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {getSalespersonLabel(s.id)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
-                <Label>Desconto (%)</Label>
-                <Input type="number" value={desconto} onChange={(e) => setDesconto(Number(e.target.value))} />
+                <Label>Transportadora</Label>
+                <Select value={formData.carrier_id || 'none'} onValueChange={(v) => setFormData({ ...formData, carrier_id: v === 'none' ? null : v })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhuma</SelectItem>
+                    {carrierOptions.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {getCarrierLabel(c.id)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
-                <Label>Comissão (%)</Label>
-                <Input 
-                  type="number" 
-                  step="0.5"
-                  value={comissaoPercent} 
-                  onChange={(e) => setComissaoPercent(Number(e.target.value))} 
+                <Label htmlFor="issue_date">Data de emissão</Label>
+                <Input
+                  id="issue_date"
+                  type="date"
+                  value={formData.issue_date}
+                  onChange={(e) => setFormData({ ...formData, issue_date: e.target.value })}
                 />
               </div>
             </div>
 
-            <div className="border rounded-lg p-4">
-              <div className="flex justify-between items-center mb-3">
-                <h4 className="font-medium">Itens</h4>
-                <Button size="sm" variant="outline" onClick={handleAddItem}><Plus className="h-4 w-4 mr-1" /> Adicionar</Button>
-              </div>
-              {items.map((item, index) => (
-                <div key={index} className="grid grid-cols-12 gap-2 mb-2 items-end">
-                  <div className="col-span-5">
-                    <Select value={item.produto_acabado_id} onValueChange={(v) => handleItemChange(index, 'produto_acabado_id', v)}>
-                      <SelectTrigger><SelectValue placeholder="Produto..." /></SelectTrigger>
-                      <SelectContent>
-                        {finishedProducts.map(p => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="col-span-2">
-                    <Input type="number" placeholder="Qtd" value={item.qtd_rolos || ''} onChange={(e) => handleItemChange(index, 'qtd_rolos', Number(e.target.value))} />
-                  </div>
-                  <div className="col-span-2">
-                    <Input type="number" placeholder="Valor" value={item.valor_unit || ''} onChange={(e) => handleItemChange(index, 'valor_unit', Number(e.target.value))} />
-                  </div>
-                  <div className="col-span-2 text-right font-medium">
-                    R$ {((item.valor_unit || 0) * (item.qtd_rolos || 0)).toFixed(2)}
-                  </div>
-                  <div className="col-span-1">
-                    <Button size="icon" variant="ghost" onClick={() => handleRemoveItem(index)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                  </div>
-                </div>
-              ))}
-              <div className="text-right pt-3 border-t mt-3 space-y-1">
-                <div className="text-lg font-bold">Total: R$ {calculateTotal().toFixed(2)}</div>
-                {comissaoPercent > 0 && (
-                  <div className="text-sm text-muted-foreground flex items-center justify-end gap-1">
-                    <UserCog className="h-4 w-4" />
-                    Comissão: R$ {calculateComissao().toFixed(2)}
-                  </div>
-                )}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="valid_until">Validade</Label>
+                <Input
+                  id="valid_until"
+                  type="date"
+                  value={formData.valid_until}
+                  onChange={(e) => setFormData({ ...formData, valid_until: e.target.value })}
+                />
               </div>
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="notes">Observações</Label>
+              <Textarea id="notes" value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} rows={3} />
+            </div>
+
+            {editingQuote && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">Itens do orçamento</p>
+                    <p className="text-sm text-muted-foreground">Campos calculados também são preenchidos manualmente nesta fase.</p>
+                  </div>
+                  <Button onClick={() => handleOpenItemDialog()}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Adicionar item
+                  </Button>
+                </div>
+
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Produto</TableHead>
+                      <TableHead>Bobina</TableHead>
+                      <TableHead className="text-right">Qtd</TableHead>
+                      <TableHead className="text-right">Preço</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {quoteItemsForEditing.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                          Nenhum item adicionado
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      quoteItemsForEditing.map((qi) => (
+                        <TableRow key={qi.id}>
+                          <TableCell>{getFinishedProductLabel(qi.finished_product_id)}</TableCell>
+                          <TableCell>{getRawProductLabel(qi.raw_product_id)}</TableCell>
+                          <TableCell className="text-right">{qi.quantity}</TableCell>
+                          <TableCell className="text-right">R$ {qi.sale_price.toFixed(2)}</TableCell>
+                          <TableCell className="text-right">R$ {qi.total_price.toFixed(2)}</TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="icon" onClick={() => handleOpenItemDialog(qi)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDeleteItem(qi.id)}>
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave}>Criar Orçamento</Button>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSave}>{editingQuote ? 'Salvar' : 'Criar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={isItemDialogOpen} onOpenChange={setIsItemDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingItem ? 'Editar item' : 'Novo item'}</DialogTitle>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Produto acabado</Label>
+                <Select
+                  value={itemFormData.finished_product_id || 'none'}
+                  onValueChange={(v) => setItemFormData(syncTotalPrice({ ...itemFormData, finished_product_id: v === 'none' ? null : v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhum</SelectItem>
+                    {finishedProductOptions.map((fp) => (
+                      <SelectItem key={fp.id} value={fp.id}>
+                        {getFinishedProductLabel(fp.id)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Bobina / matéria-prima</Label>
+                <Select
+                  value={itemFormData.raw_product_id || 'none'}
+                  onValueChange={(v) => setItemFormData(syncTotalPrice({ ...itemFormData, raw_product_id: v === 'none' ? null : v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhuma</SelectItem>
+                    {rawProductOptions.map((rp) => (
+                      <SelectItem key={rp.id} value={rp.id}>
+                        {getRawProductLabel(rp.id)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="description">Descrição</Label>
+              <Input
+                id="description"
+                value={itemFormData.description}
+                onChange={(e) => setItemFormData(syncTotalPrice({ ...itemFormData, description: e.target.value }))}
+              />
+            </div>
+
+            <div className="grid grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="quantity">Quantidade</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  step="1"
+                  value={itemFormData.quantity}
+                  onChange={(e) => setItemFormData(syncTotalPrice({ ...itemFormData, quantity: Number(e.target.value) }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sale_price">Preço de venda</Label>
+                <Input
+                  id="sale_price"
+                  type="number"
+                  step="0.01"
+                  value={itemFormData.sale_price}
+                  onChange={(e) => setItemFormData(syncTotalPrice({ ...itemFormData, sale_price: Number(e.target.value) }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="total_price">Total (salvo)</Label>
+                <Input
+                  id="total_price"
+                  type="number"
+                  step="0.01"
+                  value={itemFormData.total_price}
+                  onChange={(e) => setItemFormData({ ...itemFormData, total_price: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="profit_margin">Margem</Label>
+                <Input
+                  id="profit_margin"
+                  type="number"
+                  step="0.01"
+                  value={itemFormData.profit_margin}
+                  onChange={(e) => setItemFormData({ ...itemFormData, profit_margin: Number(e.target.value) })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="width_mm">Largura (mm)</Label>
+                <Input
+                  id="width_mm"
+                  type="number"
+                  step="0.01"
+                  value={itemFormData.width_mm}
+                  onChange={(e) => setItemFormData({ ...itemFormData, width_mm: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="height_mm">Altura (mm)</Label>
+                <Input
+                  id="height_mm"
+                  type="number"
+                  step="0.01"
+                  value={itemFormData.height_mm}
+                  onChange={(e) => setItemFormData({ ...itemFormData, height_mm: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="units_per_row">Qtd por carreira</Label>
+                <Input
+                  id="units_per_row"
+                  type="number"
+                  step="1"
+                  value={itemFormData.units_per_row}
+                  onChange={(e) => setItemFormData({ ...itemFormData, units_per_row: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="units_per_meter">Qtd por metro</Label>
+                <Input
+                  id="units_per_meter"
+                  type="number"
+                  step="0.01"
+                  value={itemFormData.units_per_meter}
+                  onChange={(e) => setItemFormData({ ...itemFormData, units_per_meter: Number(e.target.value) })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="material_used_meters">Consumo (m)</Label>
+                <Input
+                  id="material_used_meters"
+                  type="number"
+                  step="0.01"
+                  value={itemFormData.material_used_meters}
+                  onChange={(e) => setItemFormData({ ...itemFormData, material_used_meters: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="waste_meters">Perda (m)</Label>
+                <Input
+                  id="waste_meters"
+                  type="number"
+                  step="0.01"
+                  value={itemFormData.waste_meters}
+                  onChange={(e) => setItemFormData({ ...itemFormData, waste_meters: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="total_cost">Custo total</Label>
+                <Input
+                  id="total_cost"
+                  type="number"
+                  step="0.01"
+                  value={itemFormData.total_cost}
+                  onChange={(e) => setItemFormData({ ...itemFormData, total_cost: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="unit_cost">Custo unitário</Label>
+                <Input
+                  id="unit_cost"
+                  type="number"
+                  step="0.01"
+                  value={itemFormData.unit_cost}
+                  onChange={(e) => setItemFormData({ ...itemFormData, unit_cost: Number(e.target.value) })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="technical_notes">Observações técnicas</Label>
+              <Textarea
+                id="technical_notes"
+                value={itemFormData.technical_notes}
+                onChange={(e) => setItemFormData({ ...itemFormData, technical_notes: e.target.value })}
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsItemDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveItem}>{editingItem ? 'Salvar' : 'Adicionar'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o orçamento "{deletingQuote?.quote_number}"?
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

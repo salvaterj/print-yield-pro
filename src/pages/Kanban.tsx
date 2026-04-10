@@ -61,7 +61,7 @@ export default function Kanban() {
   const handlePrintOS = () => {
     if (!selectedOS) return;
     const client = clients.find(c => c.id === selectedOS.cliente_id);
-    generateOSPDF(selectedOS, client);
+    generateOSPDF(selectedOS, client, undefined, undefined);
   };
 
   const handleQualidadeOK = () => {
@@ -168,7 +168,7 @@ export default function Kanban() {
                                 <CheckCircle2 className="h-3 w-3 text-status-success flex-shrink-0" />
                               )}
                             </div>
-                            <p className="text-xs text-muted-foreground truncate">{osClient?.nome_fantasia}</p>
+                            <p className="text-xs text-muted-foreground truncate">{osClient?.trade_name}</p>
                             <p className="text-xs truncate">{os.nome_pedido}</p>
                             <div className="flex items-center justify-between mt-2">
                               <span className={`text-xs ${isOverdue ? 'text-status-error font-medium' : 'text-muted-foreground'}`}>
@@ -227,7 +227,7 @@ export default function Kanban() {
                 <div className="space-y-3">
                   <div>
                     <p className="text-sm text-muted-foreground">Cliente</p>
-                    <p className="font-medium">{client?.nome_fantasia}</p>
+                    <p className="font-medium">{client?.trade_name}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Pedido</p>

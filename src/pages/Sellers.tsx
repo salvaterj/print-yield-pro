@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import { Seller } from '@/types';
+import { Salesperson } from '@/types';
 import { 
   Table, 
   TableBody, 
@@ -33,45 +33,49 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Pencil, Trash2, Search, UserCog, Users } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Plus, Pencil, Trash2, Search, UserCog } from 'lucide-react';
 import { toast } from 'sonner';
 
-const emptySeller: Omit<Seller, 'id' | 'created_at' | 'updated_at'> = {
-  nome: '',
+const emptySeller: Omit<Salesperson, 'id' | 'created_at' | 'updated_at'> = {
+  code: '',
+  name: '',
+  phone: '',
+  whatsapp: '',
   email: '',
-  telefone: '',
-  comissao_padrao_percent: 5,
-  clientes_ids: [],
-  ativo: true,
-  observacoes: '',
+  commission_type: 'percentage',
+  commission_value: 0,
+  notes: '',
+  active: true,
 };
 
 export default function Sellers() {
-  const { sellers, clients, addSeller, updateSeller, deleteSeller } = useApp();
+  const { salespeople, addSalesperson, updateSalesperson, deleteSalesperson } = useApp();
   const [search, setSearch] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [editingSeller, setEditingSeller] = useState<Seller | null>(null);
-  const [deletingSeller, setDeletingSeller] = useState<Seller | null>(null);
+  const [editingSeller, setEditingSeller] = useState<Salesperson | null>(null);
+  const [deletingSeller, setDeletingSeller] = useState<Salesperson | null>(null);
   const [formData, setFormData] = useState(emptySeller);
 
-  const filteredSellers = sellers.filter(seller => 
-    seller.nome.toLowerCase().includes(search.toLowerCase()) ||
-    seller.email.toLowerCase().includes(search.toLowerCase())
+  const filteredSellers = salespeople.filter((seller) =>
+    (seller.name?.toLowerCase() || '').includes(search.toLowerCase()) ||
+    (seller.email?.toLowerCase() || '').includes(search.toLowerCase())
   );
 
-  const handleOpenDialog = (seller?: Seller) => {
+  const handleOpenDialog = (seller?: Salesperson) => {
     if (seller) {
       setEditingSeller(seller);
       setFormData({
-        nome: seller.nome,
-        email: seller.email,
-        telefone: seller.telefone,
-        comissao_padrao_percent: seller.comissao_padrao_percent,
-        clientes_ids: seller.clientes_ids,
-        ativo: seller.ativo,
-        observacoes: seller.observacoes,
+        code: seller.code || '',
+        name: seller.name || '',
+        phone: seller.phone || '',
+        whatsapp: seller.whatsapp || '',
+        email: seller.email || '',
+        commission_type: seller.commission_type || 'percentage',
+        commission_value: seller.commission_value || 0,
+        notes: seller.notes || '',
+        active: seller.active ?? true,
       });
     } else {
       setEditingSeller(null);
@@ -80,51 +84,37 @@ export default function Sellers() {
     setIsDialogOpen(true);
   };
 
-  const handleSave = () => {
-    if (!formData.nome) {
+  const handleSave = async () => {
+    if (!formData.name) {
       toast.error('Preencha o nome do vendedor');
       return;
     }
 
-    if (editingSeller) {
-      updateSeller(editingSeller.id, formData);
-      toast.success('Vendedor atualizado com sucesso!');
-    } else {
-      const newSeller: Seller = {
-        ...formData,
-        id: `seller-${Date.now()}`,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      addSeller(newSeller);
-      toast.success('Vendedor cadastrado com sucesso!');
+    try {
+      if (editingSeller) {
+        await updateSalesperson(editingSeller.id, formData);
+        toast.success('Vendedor atualizado com sucesso!');
+      } else {
+        await addSalesperson(formData);
+        toast.success('Vendedor cadastrado com sucesso!');
+      }
+      setIsDialogOpen(false);
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao salvar vendedor');
     }
-    setIsDialogOpen(false);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (deletingSeller) {
-      deleteSeller(deletingSeller.id);
-      toast.success('Vendedor excluído com sucesso!');
-      setIsDeleteDialogOpen(false);
-      setDeletingSeller(null);
+      try {
+        await deleteSalesperson(deletingSeller.id);
+        toast.success('Vendedor excluído com sucesso!');
+        setIsDeleteDialogOpen(false);
+        setDeletingSeller(null);
+      } catch (e: any) {
+        toast.error(e?.message || 'Falha ao excluir vendedor');
+      }
     }
-  };
-
-  const toggleClientLink = (clientId: string) => {
-    const currentIds = formData.clientes_ids;
-    if (currentIds.includes(clientId)) {
-      setFormData({ ...formData, clientes_ids: currentIds.filter(id => id !== clientId) });
-    } else {
-      setFormData({ ...formData, clientes_ids: [...currentIds, clientId] });
-    }
-  };
-
-  const getClientNames = (clientIds: string[]) => {
-    return clientIds
-      .map(id => clients.find(c => c.id === id)?.nome_fantasia)
-      .filter(Boolean)
-      .join(', ');
   };
 
   return (
@@ -168,7 +158,6 @@ export default function Sellers() {
                 <TableHead>Email</TableHead>
                 <TableHead>Telefone</TableHead>
                 <TableHead>Comissão</TableHead>
-                <TableHead>Clientes</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -176,30 +165,26 @@ export default function Sellers() {
             <TableBody>
               {filteredSellers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     Nenhum vendedor encontrado
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredSellers.map((seller) => (
                   <TableRow key={seller.id}>
-                    <TableCell className="font-medium">{seller.nome}</TableCell>
+                    <TableCell className="font-medium">{seller.name}</TableCell>
                     <TableCell>{seller.email}</TableCell>
-                    <TableCell>{seller.telefone}</TableCell>
+                    <TableCell>{seller.phone}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className="bg-primary/10 text-primary">
-                        {seller.comissao_padrao_percent}%
+                        {seller.commission_type === 'fixed'
+                          ? `R$ ${seller.commission_value.toFixed(2)}`
+                          : `${seller.commission_value}%`}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">{seller.clientes_ids.length}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={seller.ativo ? 'default' : 'secondary'}>
-                        {seller.ativo ? 'Ativo' : 'Inativo'}
+                      <Badge variant={seller.active ? 'default' : 'secondary'}>
+                        {seller.active ? 'Ativo' : 'Inativo'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -240,14 +225,25 @@ export default function Sellers() {
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="nome">Nome *</Label>
+                <Label htmlFor="code">Código</Label>
                 <Input
-                  id="nome"
-                  value={formData.nome}
-                  onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                  id="code"
+                  value={formData.code}
+                  onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="name">Nome *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="Nome do vendedor"
                 />
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -258,76 +254,73 @@ export default function Sellers() {
                   placeholder="email@empresa.com"
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Telefone</Label>
+                <Input
+                  id="phone"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="(11) 99999-9999"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="telefone">Telefone</Label>
+                <Label htmlFor="whatsapp">WhatsApp</Label>
                 <Input
-                  id="telefone"
-                  value={formData.telefone}
-                  onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
+                  id="whatsapp"
+                  value={formData.whatsapp}
+                  onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
                   placeholder="(11) 99999-9999"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="comissao">Comissão Padrão (%)</Label>
+                <Label>Tipo de comissão</Label>
+                <Select value={formData.commission_type} onValueChange={(v) => setFormData({ ...formData, commission_type: v as Salesperson['commission_type'] })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percentage">Percentual</SelectItem>
+                    <SelectItem value="fixed">Valor fixo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="commission_value">
+                  {formData.commission_type === 'fixed' ? 'Comissão (R$)' : 'Comissão (%)'}
+                </Label>
                 <Input
-                  id="comissao"
+                  id="commission_value"
                   type="number"
-                  step="0.5"
-                  value={formData.comissao_padrao_percent}
-                  onChange={(e) => setFormData({ ...formData, comissao_padrao_percent: Number(e.target.value) })}
+                  step={formData.commission_type === 'fixed' ? '0.01' : '0.1'}
+                  value={formData.commission_value}
+                  onChange={(e) => setFormData({ ...formData, commission_value: Number(e.target.value) })}
                 />
               </div>
             </div>
 
             <div className="flex items-center space-x-2">
               <Switch
-                id="ativo"
-                checked={formData.ativo}
-                onCheckedChange={(checked) => setFormData({ ...formData, ativo: checked })}
+                id="active"
+                checked={formData.active}
+                onCheckedChange={(checked) => setFormData({ ...formData, active: checked })}
               />
-              <Label htmlFor="ativo">Vendedor Ativo</Label>
+              <Label htmlFor="active">Vendedor Ativo</Label>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="observacoes">Observações</Label>
+              <Label htmlFor="notes">Observações</Label>
               <Textarea
-                id="observacoes"
-                value={formData.observacoes}
-                onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
-                rows={2}
+                id="notes"
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                rows={3}
               />
-            </div>
-
-            <div className="border-t pt-4 mt-2">
-              <h4 className="font-medium mb-3 flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                Clientes Vinculados
-              </h4>
-              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                {clients.map((client) => (
-                  <div key={client.id} className="flex items-center space-x-2 p-2 border rounded-lg hover:bg-muted/50">
-                    <Checkbox
-                      id={`client-${client.id}`}
-                      checked={formData.clientes_ids.includes(client.id)}
-                      onCheckedChange={() => toggleClientLink(client.id)}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <Label htmlFor={`client-${client.id}`} className="text-sm font-medium cursor-pointer">
-                        {client.nome_fantasia}
-                      </Label>
-                      <p className="text-xs text-muted-foreground truncate">{client.cnpj}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {formData.clientes_ids.length > 0 && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  {formData.clientes_ids.length} cliente(s) vinculado(s)
-                </p>
-              )}
             </div>
           </div>
           <DialogFooter>
@@ -347,7 +340,7 @@ export default function Sellers() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja excluir o vendedor "{deletingSeller?.nome}"?
+              Tem certeza que deseja excluir o vendedor "{deletingSeller?.name}"?
               Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>

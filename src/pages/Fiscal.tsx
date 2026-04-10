@@ -98,7 +98,7 @@ export default function Fiscal() {
                   return (
                     <TableRow key={os.id}>
                       <TableCell className="font-medium">{os.numero_os}</TableCell>
-                      <TableCell>{client?.nome_fantasia}</TableCell>
+                      <TableCell>{client?.trade_name}</TableCell>
                       <TableCell>{os.nome_pedido}</TableCell>
                       <TableCell>{os.quantidade_rolos}</TableCell>
                       <TableCell className="text-right">
@@ -138,7 +138,7 @@ export default function Fiscal() {
                   <TableRow key={os.id}>
                     <TableCell className="font-medium">{os.numero_nf}</TableCell>
                     <TableCell>{os.numero_os}</TableCell>
-                    <TableCell>{client?.nome_fantasia}</TableCell>
+                    <TableCell>{client?.trade_name}</TableCell>
                     <TableCell>{os.data_nf ? format(parseISO(os.data_nf), 'dd/MM/yyyy') : '-'}</TableCell>
                     <TableCell>{os.valor_nf ? `R$ ${os.valor_nf.toFixed(2)}` : '-'}</TableCell>
                   </TableRow>

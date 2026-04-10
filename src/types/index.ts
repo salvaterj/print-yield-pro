@@ -1,254 +1,203 @@
-// ============================================
-// LabelFlow - Sistema de Gráfica de Etiquetas
-// Definição de tipos e interfaces
-// ============================================
+export type UserProfile = 'admin' | 'vendas' | 'producao';
 
-// Enums
-export type UserProfile = 'admin' | 'vendas' | 'producao' | 'fiscal' | 'impressao';
+export type CommissionType = 'percentage' | 'fixed';
 
-export type MaterialType = 'couche' | 'termica' | 'nylon' | 'outro';
-export type Finishing = 'fosco' | 'brilho' | 'outro';
-export type BaseColor = 'branco' | 'transparente' | 'outro';
-export type StockStatus = 'em_estoque' | 'reservada' | 'consumida';
-export type BladeType = 'reta' | 'bolinha' | 'outro';
+export type QuoteStatus = 'draft' | 'approved' | 'rejected' | 'canceled';
 
-export type QuoteStatus = 'rascunho' | 'enviado' | 'aprovado' | 'perdido';
+export type ProductType = 'label' | 'card' | 'tag' | 'sticker' | 'custom';
 
-export type ProductionStatus = 
-  | 'criado'
-  | 'em_fila'
-  | 'em_impressao'
-  | 'rebobinagem'
+export type WorkOrderStatus = 'pending' | 'in_production' | 'finished' | 'canceled';
+
+export type WorkflowStage =
+  | 'a_fazer'
+  | 'preparacao'
+  | 'impressao'
+  | 'rebobinagem_corte'
   | 'acabamento'
   | 'qualidade'
   | 'pronto_para_nf'
   | 'nf_emitida'
   | 'entregue';
 
-// Interfaces
-export interface Client {
+export interface Company {
   id: string;
-  nome_fantasia: string;
-  razao_social: string;
+  code: string;
+  name: string;
+  trade_name: string;
   cnpj: string;
-  contato_nome: string;
-  telefone: string;
+  state_registration: string;
+  phone: string;
+  whatsapp: string;
   email: string;
-  endereco: string;
-  observacoes: string;
+  zip_code: string;
+  address: string;
+  number: string;
+  complement: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  salesperson_id?: string;
+  default_carrier_id?: string;
+  notes: string;
+  active: boolean;
   created_at: string;
   updated_at: string;
 }
 
-export interface RawMaterial {
+export interface Carrier {
   id: string;
-  nome: string;
-  tipo: MaterialType;
-  acabamento: Finishing;
-  cor_base: BaseColor;
-  largura_mm: number;
-  comprimento_m: number;
-  gramatura?: number;
-  lote: string;
-  fornecedor: string;
-  custo_total: number;
-  custo_por_m: number; // calculated
-  estoque_status: StockStatus;
-  saldo_m: number;
-  observacoes: string;
+  code: string;
+  name: string;
+  cnpj: string;
+  phone: string;
+  whatsapp: string;
+  email: string;
+  zip_code: string;
+  address: string;
+  number: string;
+  complement: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  delivery_time_days: number;
+  notes: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Salesperson {
+  id: string;
+  code: string;
+  name: string;
+  phone: string;
+  whatsapp: string;
+  email: string;
+  commission_type: CommissionType;
+  commission_value: number;
+  notes: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RawProduct {
+  id: string;
+  code: string;
+  name: string;
+  material_type: string;
+  width_mm: number;
+  length_m: number;
+  thickness_microns: number;
+  usable_width_mm: number;
+  waste_percentage: number;
+  cost_per_meter: number;
+  cost_per_kg: number | null;
+  supplier_name: string;
+  notes: string;
+  active: boolean;
   created_at: string;
   updated_at: string;
 }
 
 export interface FinishedProduct {
   id: string;
-  nome: string;
-  material_requerido: MaterialType;
-  largura_mm: number;
-  altura_mm: number;
-  metragem_por_rolo_m: number;
-  quantidade_por_rolo?: number;
-  acabamento: Finishing;
-  cor_base: BaseColor;
-  faca_01: BladeType;
-  faca_02?: BladeType;
-  pantone_1: string;
-  pantone_2: string;
-  pantone_3: string;
-  anilox_1: string;
-  anilox_2: string;
-  anilox_3: string;
-  chapado: boolean;
-  preco_base?: number;
-  observacoes: string;
-  created_at: string;
-  updated_at: string;
-  estoque_rolos: number;
-  estoque_minimo_rolos: number;
-}
-
-export interface QuoteItem {
-  id: string;
-  produto_acabado_id: string;
-  produto_acabado?: FinishedProduct;
-  descricao: string;
-  qtd_rolos: number;
-  metragem_total_m: number;
-  valor_unit: number;
-  valor_total: number;
-  bobina_id?: string;
-  yield_snapshot?: YieldSnapshot;
-}
-
-export interface Seller {
-  id: string;
-  nome: string;
-  email: string;
-  telefone: string;
-  comissao_padrao_percent: number;
-  clientes_ids: string[];
-  ativo: boolean;
-  observacoes: string;
+  code: string;
+  name: string;
+  product_type: ProductType;
+  width_mm: number;
+  height_mm: number;
+  units_per_row: number;
+  units_per_meter: number;
+  requires_specific_raw_material: boolean;
+  default_raw_product_id: string | null;
+  base_price: number;
+  minimum_quantity: number;
+  notes: string;
+  active: boolean;
   created_at: string;
   updated_at: string;
 }
 
 export interface Quote {
   id: string;
-  numero: string;
-  data: string;
-  cliente_id: string;
-  cliente?: Client;
-  vendedor_nome: string;
-  vendedor_id?: string;
-  vendedor?: Seller;
-  comissao_percent?: number;
-  comissao_valor?: number;
-  itens: QuoteItem[];
-  prazo_entrega_dias?: number;
-  data_prevista_saida?: string;
-  desconto: number;
-  impostos: number;
-  valor_final: number;
+  quote_number: string;
+  company_id: string;
+  salesperson_id: string | null;
+  carrier_id: string | null;
   status: QuoteStatus;
-  observacoes?: string;
+  issue_date: string;
+  valid_until: string;
+  notes: string;
   created_at: string;
   updated_at: string;
 }
 
-export interface YieldSnapshot {
-  largura_bobina_mm: number;
-  largura_produto_mm: number;
-  metragem_por_rolo_m: number;
-  quantidade_rolos: number;
-  margem_corte_mm: number;
-  perdas_percent: number;
-  pistas: number;
-  eficiencia_percent: number;
-  desperdicio_mm: number;
-  metragem_total_final_m: number;
-  metragem_bobina_consumida_m: number;
-  metragem_bobina_teorica_m: number;
-  metragem_bobina_com_perdas_m: number;
-  custo_estimado: number;
-  bobina_id: string;
-  bobina_nome: string;
-  data_calculo: string;
-  usuario: string;
-}
-
-export interface YieldCalculatorOutput {
-  pistas: number;
-  eficiencia_percent: number;
-  desperdicio_mm: number;
-  metragem_total_final_m: number;
-  metragem_bobina_teorica_m: number;
-  metragem_bobina_com_perdas_m: number;
-  custo_estimado: number;
-  erro?: string;
-}
-
-export interface ServiceOrderLog {
+export interface QuoteItem {
   id: string;
-  timestamp: string;
-  usuario: string;
-  acao: string;
-  detalhes: string;
-}
-
-export interface ServiceOrder {
-  id: string;
-  numero_os: string;
-  cliente_id: string;
-  cliente?: Client;
-  vendedor_nome: string;
-  vendedor_id?: string;
-  vendedor?: Seller;
-  impressor_nome: string;
-  data_entrada: string;
-  prazo_saida_ate: string;
-  data_saida?: string;
-  
-  // Pedido
-  nome_pedido: string;
-  faca_01: BladeType;
-  faca_02?: BladeType;
-  medida_material_mm: string;
-  material: string;
-  amostra: string;
-  
-  // Cores/Pantones
-  pantone_01: string;
-  pantone_02: string;
-  pantone_03: string;
-  
-  // Anilox
-  anilox_01: string;
-  anilox_02: string;
-  anilox_03: string;
-  chapado: boolean;
-  
-  // Quantidades
-  impressao_m: number;
-  rebobinagem_m: number;
-  quantidade_rolos: number;
-  quantidade_caixa: number;
-  etiqueta_qtd?: number;
-  
-  // Bobina
-  bobina_reservada_id?: string;
-  bobina_reservada?: RawMaterial;
-  usar_caixa: string;
-  
-  // Aproveitamento
-  yield_snapshot?: YieldSnapshot;
-  
-  // NF
-  numero_nf?: string;
-  data_nf?: string;
-  valor_nf?: number;
-  
-  observacoes_producao: string;
-  status_producao: ProductionStatus;
-  qualidade_ok: boolean;
-  
-  // Histórico
-  logs: ServiceOrderLog[];
-  
+  quote_id: string;
+  finished_product_id: string | null;
+  raw_product_id: string | null;
+  description: string;
+  quantity: number;
+  width_mm: number;
+  height_mm: number;
+  units_per_row: number;
+  units_per_meter: number;
+  material_used_meters: number;
+  waste_meters: number;
+  total_cost: number;
+  unit_cost: number;
+  sale_price: number;
+  total_price: number;
+  profit_margin: number;
+  technical_notes: string;
   created_at: string;
   updated_at: string;
 }
 
-// Utility types
-export interface KanbanColumn {
-  id: ProductionStatus;
-  title: string;
-  color: string;
+export interface WorkOrder {
+  id: string;
+  os_number: string;
+  quote_id: string | null;
+  company_id: string;
+  salesperson_id: string | null;
+  carrier_id: string | null;
+  status: WorkOrderStatus;
+  workflow_stage: WorkflowStage;
+  issue_date: string;
+  deadline: string;
+  production_notes: string;
+  internal_notes: string;
+  created_at: string;
+  updated_at: string;
 }
 
-export interface DashboardStats {
-  osEmAtraso: number;
-  osPorEtapa: Record<ProductionStatus, number>;
-  bobinasEstoqueBaixo: number;
-  orcamentosPendentes: number;
+export interface WorkOrderItem {
+  id: string;
+  work_order_id: string;
+  finished_product_id: string | null;
+  raw_product_id: string | null;
+  description: string;
+  quantity: number;
+  width_mm: number;
+  height_mm: number;
+  units_per_row: number;
+  units_per_meter: number;
+  material_used_meters: number;
+  waste_meters: number;
+  setup_notes: string;
+  technical_notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SystemSettings {
+  id: string;
+  company_name: string;
+  document_footer: string;
+  default_quote_validity_days: number;
+  default_waste_percentage: number;
+  created_at: string;
+  updated_at: string;
 }

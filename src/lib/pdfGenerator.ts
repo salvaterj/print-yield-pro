@@ -1,4 +1,4 @@
-import { ServiceOrder, Quote, Client, YieldSnapshot } from '@/types';
+import { ServiceOrder, Quote, Client, Company, Carrier } from '@/types';
 import { format, parseISO } from 'date-fns';
 
 // Utility function to generate printable HTML and trigger print
@@ -48,7 +48,7 @@ function printDocument(content: string, title: string) {
           margin-bottom: 10px;
         }
         .section-title { 
-          background: #333; 
+          background: #000; 
           color: white; 
           padding: 5px 10px;
           font-weight: bold;
@@ -114,16 +114,12 @@ function printDocument(content: string, title: string) {
           font-weight: bold;
           background: #f5f5f5;
         }
-        .logo-placeholder { 
-          width: 100px;
-          height: 50px;
-          border: 1px dashed #999;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 10px;
-          color: #999;
-          margin-bottom: 10px;
+        .brand-logo {
+          display: block;
+          height: 40px;
+          max-width: 220px;
+          object-fit: contain;
+          margin: 0 auto 10px auto;
         }
         .footer {
           margin-top: 20px;
@@ -149,11 +145,16 @@ function printDocument(content: string, title: string) {
 }
 
 // Generate OS PDF
-export function generateOSPDF(os: ServiceOrder, client: Client | undefined) {
+export function generateOSPDF(
+  os: ServiceOrder,
+  client: Client | undefined,
+  company?: Company | null,
+  carrier?: Carrier,
+) {
   const content = `
     <div class="page">
       <div class="header">
-        <div class="logo-placeholder">LOGO</div>
+        <img class="brand-logo" src="/rocha-etiquetas.webp" alt="Rocha Etiquetas" />
         <h1>ORDEM DE SERVIÇO</h1>
         <div class="numero">Nº ${os.numero_os}</div>
       </div>
@@ -163,12 +164,22 @@ export function generateOSPDF(os: ServiceOrder, client: Client | undefined) {
         <div class="section-content">
           <div class="grid-2">
             <div class="field">
+              <div class="field-label">Empresa</div>
+              <div class="field-value">${company?.company_name || ''}</div>
+            </div>
+            <div class="field">
               <div class="field-label">Vendedor</div>
               <div class="field-value">${os.vendedor_nome || ''}</div>
             </div>
+          </div>
+          <div class="grid-2" style="margin-top: 10px;">
             <div class="field">
               <div class="field-label">Cliente</div>
-              <div class="field-value">${client?.nome_fantasia || ''}</div>
+              <div class="field-value">${client?.trade_name || ''}</div>
+            </div>
+            <div class="field">
+              <div class="field-label">Transportadora</div>
+              <div class="field-value">${carrier?.nome || ''}</div>
             </div>
           </div>
           <div class="grid-2" style="margin-top: 10px;">
@@ -360,7 +371,12 @@ export function generateOSPDF(os: ServiceOrder, client: Client | undefined) {
 }
 
 // Generate Quote PDF
-export function generateQuotePDF(quote: Quote, client: Client | undefined) {
+export function generateQuotePDF(
+  quote: Quote,
+  client: Client | undefined,
+  company?: Company | null,
+  carrier?: Carrier,
+) {
   const itemsHTML = quote.itens.map(item => `
     <tr>
       <td>${item.descricao}</td>
@@ -388,7 +404,7 @@ export function generateQuotePDF(quote: Quote, client: Client | undefined) {
   const content = `
     <div class="page">
       <div class="header">
-        <div class="logo-placeholder">LOGO</div>
+        <img class="brand-logo" src="/rocha-etiquetas.webp" alt="Rocha Etiquetas" />
         <h1>ORÇAMENTO</h1>
         <div class="numero">Nº ${quote.numero}</div>
       </div>
@@ -398,18 +414,28 @@ export function generateQuotePDF(quote: Quote, client: Client | undefined) {
         <div class="section-content">
           <div class="grid-2">
             <div class="field">
-              <div class="field-label">Cliente</div>
-              <div class="field-value">${client?.nome_fantasia || ''}</div>
+              <div class="field-label">Empresa</div>
+              <div class="field-value">${company?.company_name || ''}</div>
             </div>
+            <div class="field">
+              <div class="field-label">Cliente</div>
+              <div class="field-value">${client?.trade_name || ''}</div>
+            </div>
+          </div>
+          <div class="grid-2" style="margin-top: 10px;">
             <div class="field">
               <div class="field-label">CNPJ</div>
               <div class="field-value">${client?.cnpj || ''}</div>
+            </div>
+            <div class="field">
+              <div class="field-label">Transportadora</div>
+              <div class="field-value">${carrier?.nome || ''}</div>
             </div>
           </div>
           <div class="grid-2" style="margin-top: 10px;">
             <div class="field">
               <div class="field-label">Contato</div>
-              <div class="field-value">${client?.contato_nome || ''} - ${client?.telefone || ''}</div>
+              <div class="field-value">${client?.name || ''} - ${client?.phone || ''}</div>
             </div>
             <div class="field">
               <div class="field-label">Email</div>

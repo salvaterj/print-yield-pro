@@ -1,36 +1,27 @@
-import { Search, User } from 'lucide-react';
+import { LogOut, Search, User } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useApp } from '@/contexts/AppContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { UserProfile } from '@/types';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 
 const profileLabels: Record<UserProfile, string> = {
   admin: 'Administrador',
   vendas: 'Vendas',
   producao: 'Produção',
-  fiscal: 'Fiscal',
-  impressao: 'Impressão',
 };
 
 const profileColors: Record<UserProfile, string> = {
-  admin: 'bg-primary text-primary-foreground',
-  vendas: 'bg-status-info/20 text-status-info',
+  admin: 'bg-primary text-primary-foreground border-primary/20',
+  vendas: 'bg-[hsl(var(--ring))]/10 text-[hsl(var(--ring))] border-[hsl(var(--ring))]/20',
   producao: 'bg-status-warning/20 text-status-warning',
-  fiscal: 'bg-status-success/20 text-status-success',
-  impressao: 'bg-purple-100 text-purple-700',
 };
 
 export function AppHeader() {
-  const { currentProfile, setCurrentProfile, globalSearch, setGlobalSearch } = useApp();
+  const { globalSearch, setGlobalSearch } = useApp();
+  const { role, user, signOut } = useAuth();
 
   return (
     <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b bg-card px-4 shadow-sm">
@@ -50,27 +41,22 @@ export function AppHeader() {
         </div>
       </div>
       
-      {/* Profile Selector */}
       <div className="flex items-center gap-3">
-        <Badge variant="outline" className={profileColors[currentProfile]}>
-          {profileLabels[currentProfile]}
-        </Badge>
-        
-        <Select value={currentProfile} onValueChange={(v) => setCurrentProfile(v as UserProfile)}>
-          <SelectTrigger className="w-[160px] h-9">
-            <div className="flex items-center gap-2">
-              <User className="h-4 w-4" />
-              <SelectValue />
-            </div>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="admin">Administrador</SelectItem>
-            <SelectItem value="vendas">Vendas</SelectItem>
-            <SelectItem value="producao">Produção</SelectItem>
-            <SelectItem value="fiscal">Fiscal</SelectItem>
-            <SelectItem value="impressao">Impressão</SelectItem>
-          </SelectContent>
-        </Select>
+        {role && (
+          <Badge variant="outline" className={profileColors[role]}>
+            {profileLabels[role]}
+          </Badge>
+        )}
+
+        <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground">
+          <User className="h-4 w-4" />
+          <span>{user?.email}</span>
+        </div>
+
+        <Button variant="outline" size="sm" onClick={() => signOut()}>
+          <LogOut className="mr-2 h-4 w-4" />
+          Sair
+        </Button>
       </div>
     </header>
   );

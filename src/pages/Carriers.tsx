@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import { Company } from '@/types';
+import { Carrier } from '@/types';
 import { 
   Table, 
   TableBody, 
@@ -32,16 +32,13 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Pencil, Trash2, Search, Users } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Truck } from 'lucide-react';
 import { toast } from 'sonner';
 
-const emptyClient: Omit<Company, 'id' | 'created_at' | 'updated_at'> = {
+const emptyCarrier: Omit<Carrier, 'id' | 'created_at' | 'updated_at'> = {
   code: '',
   name: '',
-  trade_name: '',
   cnpj: '',
-  state_registration: '',
   phone: '',
   whatsapp: '',
   email: '',
@@ -52,88 +49,83 @@ const emptyClient: Omit<Company, 'id' | 'created_at' | 'updated_at'> = {
   neighborhood: '',
   city: '',
   state: '',
-  salesperson_id: '',
-  default_carrier_id: '',
+  delivery_time_days: 0,
   notes: '',
   active: true,
 };
 
-export default function Clients() {
-  const { companies, carriers, salespeople, addCompany, updateCompany, deleteCompany } = useApp();
+export default function Carriers() {
+  const { carriers, addCarrier, updateCarrier, deleteCarrier } = useApp();
+  
   const [search, setSearch] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [editingClient, setEditingClient] = useState<Company | null>(null);
-  const [deletingClient, setDeletingClient] = useState<Company | null>(null);
-  const [formData, setFormData] = useState(emptyClient);
+  const [editingCarrier, setEditingCarrier] = useState<Carrier | null>(null);
+  const [deletingCarrier, setDeletingCarrier] = useState<Carrier | null>(null);
+  const [formData, setFormData] = useState(emptyCarrier);
 
-  const filteredClients = companies.filter((company) =>
-    (company.trade_name?.toLowerCase() || '').includes(search.toLowerCase()) ||
-    (company.name?.toLowerCase() || '').includes(search.toLowerCase()) ||
-    (company.cnpj?.toLowerCase() || '').includes(search.toLowerCase()) ||
-    (company.city?.toLowerCase() || '').includes(search.toLowerCase())
+  const filteredCarriers = carriers.filter(carrier =>
+    (carrier.name?.toLowerCase() || '').includes(search.toLowerCase()) ||
+    (carrier.cnpj?.toLowerCase() || '').includes(search.toLowerCase())
   );
 
-  const handleOpenDialog = (client?: Company) => {
-    if (client) {
-      setEditingClient(client);
+  const handleOpenDialog = (carrier?: Carrier) => {
+    if (carrier) {
+      setEditingCarrier(carrier);
       setFormData({
-        code: client.code || '',
-        name: client.name || '',
-        trade_name: client.trade_name || '',
-        cnpj: client.cnpj || '',
-        state_registration: client.state_registration || '',
-        phone: client.phone || '',
-        whatsapp: client.whatsapp || '',
-        email: client.email || '',
-        zip_code: client.zip_code || '',
-        address: client.address || '',
-        number: client.number || '',
-        complement: client.complement || '',
-        neighborhood: client.neighborhood || '',
-        city: client.city || '',
-        state: client.state || '',
-        salesperson_id: client.salesperson_id || '',
-        default_carrier_id: client.default_carrier_id || '',
-        notes: client.notes || '',
-        active: client.active ?? true,
+        code: carrier.code || '',
+        name: carrier.name || '',
+        cnpj: carrier.cnpj || '',
+        phone: carrier.phone || '',
+        whatsapp: carrier.whatsapp || '',
+        email: carrier.email || '',
+        zip_code: carrier.zip_code || '',
+        address: carrier.address || '',
+        number: carrier.number || '',
+        complement: carrier.complement || '',
+        neighborhood: carrier.neighborhood || '',
+        city: carrier.city || '',
+        state: carrier.state || '',
+        delivery_time_days: carrier.delivery_time_days || 0,
+        notes: carrier.notes || '',
+        active: carrier.active ?? true,
       });
     } else {
-      setEditingClient(null);
-      setFormData(emptyClient);
+      setEditingCarrier(null);
+      setFormData(emptyCarrier);
     }
     setIsDialogOpen(true);
   };
 
   const handleSave = async () => {
-    if (!formData.trade_name) {
-      toast.error('Preencha o Nome Fantasia');
+    if (!formData.name) {
+      toast.error('Preencha o nome da transportadora');
       return;
     }
 
     try {
-      if (editingClient) {
-        await updateCompany(editingClient.id, formData);
-        toast.success('Cliente atualizado com sucesso!');
+      if (editingCarrier) {
+        await updateCarrier(editingCarrier.id, formData);
+        toast.success('Transportadora atualizada com sucesso!');
       } else {
-        await addCompany(formData);
-        toast.success('Cliente cadastrado com sucesso!');
+        await addCarrier(formData);
+        toast.success('Transportadora cadastrada com sucesso!');
       }
       setIsDialogOpen(false);
     } catch (e: any) {
-      toast.error(e?.message || 'Falha ao salvar cliente');
+      toast.error(e?.message || 'Falha ao salvar transportadora');
     }
   };
 
   const handleDelete = async () => {
-    if (deletingClient) {
+    if (deletingCarrier) {
       try {
-        await deleteCompany(deletingClient.id);
-        toast.success('Cliente excluído com sucesso!');
+        await deleteCarrier(deletingCarrier.id);
+        toast.success('Transportadora excluída com sucesso!');
         setIsDeleteDialogOpen(false);
-        setDeletingClient(null);
+        setDeletingCarrier(null);
       } catch (e: any) {
-        toast.error(e?.message || 'Falha ao excluir cliente');
+        toast.error(e?.message || 'Falha ao excluir transportadora');
       }
     }
   };
@@ -165,34 +157,21 @@ export default function Clients() {
 
   const formatUF = (value: string) => value.toUpperCase().slice(0, 2);
 
-  const salespersonOptions = salespeople.filter((s) => s.active);
-  const carrierOptions = carriers.filter((c) => c.active);
-
-  const getSalespersonLabel = (id: string) => {
-    const sp = salespeople.find((s) => s.id === id);
-    if (!sp) return '';
-    return sp.code ? `${sp.code} - ${sp.name}` : sp.name;
-  };
-
-  const getCarrierLabel = (id: string) => {
-    const c = carriers.find((x) => x.id === id);
-    if (!c) return '';
-    return c.code ? `${c.code} - ${c.name}` : c.name;
-  };
+  const formatCode = (value: string) => value.replace(/[^\dA-Za-z_-]/g, '').slice(0, 20);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <Users className="h-6 w-6" />
-            Clientes
+            <Truck className="h-6 w-6" />
+            Transportadoras
           </h1>
-          <p className="text-muted-foreground">Gerencie os clientes da gráfica</p>
+          <p className="text-muted-foreground">Gerencie as transportadoras cadastradas</p>
         </div>
         <Button onClick={() => handleOpenDialog()}>
           <Plus className="mr-2 h-4 w-4" />
-          Novo Cliente
+          Nova Transportadora
         </Button>
       </div>
 
@@ -202,14 +181,14 @@ export default function Clients() {
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nome/cidade/CNPJ..."
+                placeholder="Buscar por nome ou CNPJ..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-10"
               />
             </div>
             <p className="text-sm text-muted-foreground">
-              {filteredClients.length} cliente(s)
+              {filteredCarriers.length} transportadora(s)
             </p>
           </div>
         </CardHeader>
@@ -217,34 +196,32 @@ export default function Clients() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Código</TableHead>
-                <TableHead>Nome Fantasia</TableHead>
+                <TableHead>Nome</TableHead>
                 <TableHead>CNPJ</TableHead>
-                <TableHead>Cidade</TableHead>
                 <TableHead>Telefone</TableHead>
+                <TableHead>Email</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredClients.length === 0 ? (
+              {filteredCarriers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                    Nenhum cliente encontrado
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    Nenhuma transportadora encontrada
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredClients.map((client) => (
-                  <TableRow key={client.id}>
-                    <TableCell>{client.code}</TableCell>
-                    <TableCell className="font-medium">{client.trade_name}</TableCell>
-                    <TableCell>{client.cnpj}</TableCell>
-                    <TableCell>{client.city}</TableCell>
-                    <TableCell>{client.phone}</TableCell>
+                filteredCarriers.map((carrier) => (
+                  <TableRow key={carrier.id}>
+                    <TableCell className="font-medium">{carrier.name}</TableCell>
+                    <TableCell>{carrier.cnpj}</TableCell>
+                    <TableCell>{carrier.phone}</TableCell>
+                    <TableCell>{carrier.email}</TableCell>
                     <TableCell className="text-right">
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleOpenDialog(client)}
+                        onClick={() => handleOpenDialog(carrier)}
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
@@ -252,7 +229,7 @@ export default function Clients() {
                         variant="ghost"
                         size="icon"
                         onClick={() => {
-                          setDeletingClient(client);
+                          setDeletingCarrier(carrier);
                           setIsDeleteDialogOpen(true);
                         }}
                       >
@@ -272,7 +249,7 @@ export default function Clients() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {editingClient ? 'Editar Cliente' : 'Novo Cliente'}
+              {editingCarrier ? 'Editar Transportadora' : 'Nova Transportadora'}
             </DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -282,27 +259,19 @@ export default function Clients() {
                 <Input
                   id="code"
                   value={formData.code}
-                  onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, code: formatCode(e.target.value) })}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="trade_name">Nome Fantasia *</Label>
-                <Input
-                  id="trade_name"
-                  value={formData.trade_name}
-                  onChange={(e) => setFormData({ ...formData, trade_name: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Razão social / Nome da empresa</Label>
+                <Label htmlFor="name">Nome *</Label>
                 <Input
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 />
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="cnpj">CNPJ</Label>
                 <Input
@@ -312,23 +281,13 @@ export default function Clients() {
                   placeholder="00.000.000/0000-00"
                 />
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="state_registration">Inscrição estadual</Label>
+                <Label htmlFor="email">Email</Label>
                 <Input
-                  id="state_registration"
-                  value={formData.state_registration}
-                  onChange={(e) => setFormData({ ...formData, state_registration: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="zip_code">CEP</Label>
-                <Input
-                  id="zip_code"
-                  value={formData.zip_code}
-                  onChange={(e) => setFormData({ ...formData, zip_code: formatZipCode(e.target.value) })}
-                  placeholder="00000-000"
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 />
               </div>
             </div>
@@ -354,12 +313,12 @@ export default function Clients() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="email">E-mail</Label>
+                <Label htmlFor="zip_code">CEP</Label>
                 <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  id="zip_code"
+                  value={formData.zip_code}
+                  onChange={(e) => setFormData({ ...formData, zip_code: formatZipCode(e.target.value) })}
+                  placeholder="00000-000"
                 />
               </div>
               <div className="space-y-2">
@@ -389,15 +348,15 @@ export default function Clients() {
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="address">Endereço</Label>
-              <Input
-                id="address"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              />
-            </div>
             <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="address">Endereço</Label>
+                <Input
+                  id="address"
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                />
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="number">Número</Label>
                 <Input
@@ -406,52 +365,29 @@ export default function Clients() {
                   onChange={(e) => setFormData({ ...formData, number: e.target.value })}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="complement">Complemento</Label>
-                <Input
-                  id="complement"
-                  value={formData.complement}
-                  onChange={(e) => setFormData({ ...formData, complement: e.target.value })}
-                />
-              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="complement">Complemento</Label>
+              <Input
+                id="complement"
+                value={formData.complement}
+                onChange={(e) => setFormData({ ...formData, complement: e.target.value })}
+              />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Vendedor responsável</Label>
-                <Select value={formData.salesperson_id || 'none'} onValueChange={(v) => setFormData({ ...formData, salesperson_id: v === 'none' ? '' : v })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhum</SelectItem>
-                    {salespersonOptions.map((sp) => (
-                      <SelectItem key={sp.id} value={sp.id}>
-                        {getSalespersonLabel(sp.id)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="delivery_time_days">Prazo de Entrega Padrão (dias)</Label>
+                <Input
+                  id="delivery_time_days"
+                  type="number"
+                  value={formData.delivery_time_days}
+                  onChange={(e) => setFormData({ ...formData, delivery_time_days: parseInt(e.target.value) || 0 })}
+                />
               </div>
-              <div className="space-y-2">
-                <Label>Transportadora padrão</Label>
-                <Select value={formData.default_carrier_id || 'none'} onValueChange={(v) => setFormData({ ...formData, default_carrier_id: v === 'none' ? '' : v })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhuma</SelectItem>
-                    {carrierOptions.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {getCarrierLabel(c.id)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="flex items-center gap-2 pt-8">
+                <Switch checked={formData.active} onCheckedChange={(checked) => setFormData({ ...formData, active: checked })} />
+                <Label>Ativo</Label>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Switch checked={formData.active} onCheckedChange={(checked) => setFormData({ ...formData, active: checked })} />
-              <Label>Ativo</Label>
             </div>
             <div className="space-y-2">
               <Label htmlFor="notes">Observações</Label>
@@ -468,7 +404,7 @@ export default function Clients() {
               Cancelar
             </Button>
             <Button onClick={handleSave}>
-              {editingClient ? 'Salvar' : 'Cadastrar'}
+              {editingCarrier ? 'Salvar' : 'Cadastrar'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -480,7 +416,7 @@ export default function Clients() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja excluir o cliente "{deletingClient?.trade_name}"?
+              Tem certeza que deseja excluir a transportadora "{deletingCarrier?.name}"?
               Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
