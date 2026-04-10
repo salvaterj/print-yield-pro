@@ -206,17 +206,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addCompany = async (input: Omit<Company, 'id' | 'created_at' | 'updated_at'>) => {
-    const now = new Date().toISOString();
-    const row: Company = { ...input, id: newId(), created_at: now, updated_at: now };
-    setCompanies((prev) => [...prev, row]);
-
     try {
       const sb = requireSupabase();
-      const { error } = await sb.from('companies').insert(row);
+      const { data, error } = await sb.from('companies').insert(input).select('*').single();
       if (error) throw error;
+      const row = data as Company;
+      setCompanies((prev) => [...prev, row]);
       return row;
     } catch (e: any) {
-      setCompanies((prev) => prev.filter((c) => c.id !== row.id));
       throw new Error(e?.message || 'Falha ao salvar cliente');
     }
   };
