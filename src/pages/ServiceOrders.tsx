@@ -38,7 +38,7 @@ const emptyWorkOrder: Omit<WorkOrder, 'id' | 'created_at' | 'updated_at'> = {
   os_number: '',
   quote_id: null,
   company_id: '',
-  salesperson_id: null,
+  salesperson_id: '',
   carrier_id: null,
   status: 'pending',
   workflow_stage: 'a_fazer',
@@ -116,7 +116,7 @@ export default function ServiceOrders() {
     return c.code ? `${c.code} - ${c.name}` : c.name;
   };
 
-  const getSalespersonLabel = (id: string | null) => {
+  const getSalespersonLabel = (id: string) => {
     if (!id) return '-';
     const s = salespeople.find((x) => x.id === id);
     if (!s) return '-';
@@ -151,7 +151,7 @@ export default function ServiceOrders() {
         os_number: order.os_number,
         quote_id: order.quote_id,
         company_id: order.company_id,
-        salesperson_id: order.salesperson_id,
+        salesperson_id: order.salesperson_id || '',
         carrier_id: order.carrier_id,
         status: order.status,
         workflow_stage: order.workflow_stage,
@@ -171,6 +171,11 @@ export default function ServiceOrders() {
   const handleSave = async () => {
     if (!formData.company_id) {
       toast.error('Selecione o cliente');
+      return;
+    }
+
+    if (!formData.salesperson_id) {
+      toast.error('Selecione o vendedor');
       return;
     }
 
@@ -420,7 +425,15 @@ export default function ServiceOrders() {
               </div>
               <div className="space-y-2">
                 <Label>Cliente *</Label>
-                <Select value={formData.company_id || 'none'} onValueChange={(v) => setFormData({ ...formData, company_id: v === 'none' ? '' : v })}>
+                <Select value={formData.company_id || 'none'} onValueChange={(v) => {
+                  const companyId = v === 'none' ? '' : v;
+                  const company = companies.find(c => c.id === companyId);
+                  setFormData({ 
+                    ...formData, 
+                    company_id: companyId,
+                    salesperson_id: company?.salesperson_id || formData.salesperson_id
+                  });
+                }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
@@ -480,13 +493,13 @@ export default function ServiceOrders() {
                 <Input id="deadline" type="date" value={formData.deadline} onChange={(e) => setFormData({ ...formData, deadline: e.target.value })} />
               </div>
               <div className="space-y-2">
-                <Label>Vendedor</Label>
-                <Select value={formData.salesperson_id || 'none'} onValueChange={(v) => setFormData({ ...formData, salesperson_id: v === 'none' ? null : v })}>
+                <Label>Vendedor *</Label>
+                <Select value={formData.salesperson_id || 'none'} onValueChange={(v) => setFormData({ ...formData, salesperson_id: v === 'none' ? '' : v })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Nenhum</SelectItem>
+                    <SelectItem value="none">Selecione...</SelectItem>
                     {salespersonOptions.map((s) => (
                       <SelectItem key={s.id} value={s.id}>
                         {getSalespersonLabel(s.id)}

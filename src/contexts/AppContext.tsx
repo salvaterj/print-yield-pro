@@ -102,6 +102,8 @@ interface AppContextType {
 
   getSalespersonByCompanyId: (companyId: string) => Salesperson | undefined;
   
+  generateNextCompanyCode: () => string;
+  
   // Global search
   globalSearch: string;
   setGlobalSearch: (search: string) => void;
@@ -209,11 +211,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const sb = requireSupabase();
       const { data, error } = await sb.from('companies').insert(input).select('*').single();
-      if (error) throw error;
+      if (error) {
+        console.error('[Supabase] Erro ao adicionar empresa:', error);
+        throw error;
+      }
       const row = data as Company;
       setCompanies((prev) => [...prev, row]);
       return row;
     } catch (e: any) {
+      console.error('[AppContext] Falha ao salvar cliente:', e);
       throw new Error(e?.message || 'Falha ao salvar cliente');
     }
   };
@@ -226,9 +232,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const sb = requireSupabase();
       const { error } = await sb.from('companies').update({ ...updates, updated_at: now }).eq('id', id);
-      if (error) throw error;
+      if (error) {
+        console.error('[Supabase] Erro ao atualizar empresa:', error);
+        throw error;
+      }
     } catch (e: any) {
       if (previous) setCompanies((prev) => prev.map((c) => (c.id === id ? previous : c)));
+      console.error('[AppContext] Falha ao atualizar cliente:', e);
       throw new Error(e?.message || 'Falha ao atualizar cliente');
     }
   };
@@ -652,6 +662,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return salespeople.find(s => s.id === company.salesperson_id);
   };
 
+  const generateNextCompanyCode = () => {
+    if (companies.length === 0) return 'CLI-001';
+    
+    const codes = companies
+      .map(c => c.code)
+      .filter(code => code && code.startsWith('CLI-'))
+      .map(code => parseInt(code.replace(/\D/g, '')))
+      .filter(num => !isNaN(num) && num > 0);
+    
+    if (codes.length === 0) return 'CLI-001';
+    
+    const maxCode = Math.max(...codes);
+    return `CLI-${String(maxCode + 1).padStart(3, '0')}`;
+  };
+
   return (
     <AppContext.Provider value={{
       currentProfile, setCurrentProfile,
@@ -667,6 +692,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       workOrderItems, setWorkOrderItems, addWorkOrderItem, updateWorkOrderItem, deleteWorkOrderItem,
       saveSystemSettings,
       getSalespersonByCompanyId,
+      generateNextCompanyCode,
       globalSearch, setGlobalSearch
     }}>
       {children}

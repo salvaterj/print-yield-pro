@@ -26,6 +26,7 @@ export interface Company {
   trade_name: string;
   cnpj: string;
   state_registration: string;
+  state_registration_isento: boolean;
   phone: string;
   whatsapp: string;
   email: string;
@@ -59,7 +60,6 @@ export interface Carrier {
   neighborhood: string;
   city: string;
   state: string;
-  delivery_time_days: number;
   notes: string;
   active: boolean;
   created_at: string;
@@ -123,7 +123,7 @@ export interface Quote {
   id: string;
   quote_number: string;
   company_id: string;
-  salesperson_id: string | null;
+  salesperson_id: string;
   carrier_id: string | null;
   status: QuoteStatus;
   issue_date: string;
@@ -161,7 +161,7 @@ export interface WorkOrder {
   os_number: string;
   quote_id: string | null;
   company_id: string;
-  salesperson_id: string | null;
+  salesperson_id: string;
   carrier_id: string | null;
   status: WorkOrderStatus;
   workflow_stage: WorkflowStage;

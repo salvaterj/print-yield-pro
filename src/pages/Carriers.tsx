@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { Carrier } from '@/types';
+import { fetchAddressByCEP } from '@/lib/utils';
 import { 
   Table, 
   TableBody, 
@@ -49,7 +50,6 @@ const emptyCarrier: Omit<Carrier, 'id' | 'created_at' | 'updated_at'> = {
   neighborhood: '',
   city: '',
   state: '',
-  delivery_time_days: 0,
   notes: '',
   active: true,
 };
@@ -86,7 +86,6 @@ export default function Carriers() {
         neighborhood: carrier.neighborhood || '',
         city: carrier.city || '',
         state: carrier.state || '',
-        delivery_time_days: carrier.delivery_time_days || 0,
         notes: carrier.notes || '',
         active: carrier.active ?? true,
       });
@@ -318,6 +317,18 @@ export default function Carriers() {
                   id="zip_code"
                   value={formData.zip_code}
                   onChange={(e) => setFormData({ ...formData, zip_code: formatZipCode(e.target.value) })}
+                  onBlur={async (e) => {
+                    const address = await fetchAddressByCEP(e.target.value);
+                    if (address) {
+                      setFormData(prev => ({
+                        ...prev,
+                        address: address.address,
+                        neighborhood: address.neighborhood,
+                        city: address.city,
+                        state: address.state
+                      }));
+                    }
+                  }}
                   placeholder="00000-000"
                 />
               </div>
@@ -374,20 +385,9 @@ export default function Carriers() {
                 onChange={(e) => setFormData({ ...formData, complement: e.target.value })}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="delivery_time_days">Prazo de Entrega Padrão (dias)</Label>
-                <Input
-                  id="delivery_time_days"
-                  type="number"
-                  value={formData.delivery_time_days}
-                  onChange={(e) => setFormData({ ...formData, delivery_time_days: parseInt(e.target.value) || 0 })}
-                />
-              </div>
-              <div className="flex items-center gap-2 pt-8">
-                <Switch checked={formData.active} onCheckedChange={(checked) => setFormData({ ...formData, active: checked })} />
-                <Label>Ativo</Label>
-              </div>
+            <div className="flex items-center gap-2">
+              <Switch checked={formData.active} onCheckedChange={(checked) => setFormData({ ...formData, active: checked })} />
+              <Label>Ativo</Label>
             </div>
             <div className="space-y-2">
               <Label htmlFor="notes">Observações</Label>

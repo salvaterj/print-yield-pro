@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { Company } from '@/types';
+import { fetchAddressByCEP } from '@/lib/utils';
 import { 
   Table, 
   TableBody, 
@@ -42,6 +43,7 @@ const emptyClient: Omit<Company, 'id' | 'created_at' | 'updated_at'> = {
   trade_name: '',
   cnpj: '',
   state_registration: '',
+  state_registration_isento: false,
   phone: '',
   whatsapp: '',
   email: '',
@@ -59,7 +61,7 @@ const emptyClient: Omit<Company, 'id' | 'created_at' | 'updated_at'> = {
 };
 
 export default function Clients() {
-  const { companies, carriers, salespeople, addCompany, updateCompany, deleteCompany } = useApp();
+  const { companies, carriers, salespeople, addCompany, updateCompany, deleteCompany, generateNextCompanyCode } = useApp();
   const [search, setSearch] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -83,6 +85,7 @@ export default function Clients() {
         trade_name: client.trade_name || '',
         cnpj: client.cnpj || '',
         state_registration: client.state_registration || '',
+        state_registration_isento: client.state_registration_isento ?? false,
         phone: client.phone || '',
         whatsapp: client.whatsapp || '',
         email: client.email || '',
@@ -100,7 +103,7 @@ export default function Clients() {
       });
     } else {
       setEditingClient(null);
-      setFormData(emptyClient);
+      setFormData({ ...emptyClient, code: generateNextCompanyCode() });
     }
     setIsDialogOpen(true);
   };
@@ -112,11 +115,17 @@ export default function Clients() {
     }
 
     try {
+      const dataToSave = {
+        ...formData,
+        salesperson_id: formData.salesperson_id || null,
+        default_carrier_id: formData.default_carrier_id || null,
+      };
+
       if (editingClient) {
-        await updateCompany(editingClient.id, formData);
+        await updateCompany(editingClient.id, dataToSave);
         toast.success('Cliente atualizado com sucesso!');
       } else {
-        await addCompany(formData);
+        await addCompany(dataToSave);
         toast.success('Cliente cadastrado com sucesso!');
       }
       setIsDialogOpen(false);
@@ -282,7 +291,8 @@ export default function Clients() {
                 <Input
                   id="code"
                   value={formData.code}
-                  onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                  disabled
+                  className="bg-muted"
                 />
               </div>
               <div className="space-y-2">
@@ -318,8 +328,10 @@ export default function Clients() {
                 <Label htmlFor="state_registration">Inscrição estadual</Label>
                 <Input
                   id="state_registration"
-                  value={formData.state_registration}
+                  value={formData.state_registration_isento ? 'ISENTO' : formData.state_registration}
                   onChange={(e) => setFormData({ ...formData, state_registration: e.target.value })}
+                  disabled={formData.state_registration_isento}
+                  placeholder={formData.state_registration_isento ? 'Isento' : '000.000.00-0'}
                 />
               </div>
               <div className="space-y-2">
@@ -328,9 +340,32 @@ export default function Clients() {
                   id="zip_code"
                   value={formData.zip_code}
                   onChange={(e) => setFormData({ ...formData, zip_code: formatZipCode(e.target.value) })}
+                  onBlur={async (e) => {
+                    const address = await fetchAddressByCEP(e.target.value);
+                    if (address) {
+                      setFormData(prev => ({
+                        ...prev,
+                        address: address.address,
+                        neighborhood: address.neighborhood,
+                        city: address.city,
+                        state: address.state
+                      }));
+                    }
+                  }}
                   placeholder="00000-000"
                 />
               </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={formData.state_registration_isento}
+                onCheckedChange={(checked) => setFormData({
+                  ...formData,
+                  state_registration_isento: checked,
+                  state_registration: checked ? '' : formData.state_registration
+                })}
+              />
+              <Label>Inscrição estadual isenta</Label>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">

@@ -25,7 +25,7 @@ const quoteStatusOptions: Array<{ value: QuoteStatus; label: string }> = [
 const emptyQuote: Omit<Quote, 'id' | 'created_at' | 'updated_at'> = {
   quote_number: '',
   company_id: '',
-  salesperson_id: null,
+  salesperson_id: '',
   carrier_id: null,
   status: 'draft',
   issue_date: new Date().toISOString().slice(0, 10),
@@ -97,7 +97,7 @@ export default function Quotes() {
     return c.code ? `${c.code} - ${c.trade_name}` : c.trade_name;
   };
 
-  const getSalespersonLabel = (id: string | null) => {
+  const getSalespersonLabel = (id: string) => {
     if (!id) return '-';
     const s = salespeople.find((x) => x.id === id);
     if (!s) return '-';
@@ -148,7 +148,7 @@ export default function Quotes() {
       setFormData({
         quote_number: quote.quote_number,
         company_id: quote.company_id,
-        salesperson_id: quote.salesperson_id,
+        salesperson_id: quote.salesperson_id || '',
         carrier_id: quote.carrier_id,
         status: quote.status,
         issue_date: quote.issue_date,
@@ -170,6 +170,11 @@ export default function Quotes() {
   const handleSave = async () => {
     if (!formData.company_id) {
       toast.error('Selecione o cliente');
+      return;
+    }
+
+    if (!formData.salesperson_id) {
+      toast.error('Selecione o vendedor');
       return;
     }
 
@@ -433,7 +438,15 @@ export default function Quotes() {
               </div>
               <div className="space-y-2">
                 <Label>Cliente *</Label>
-                <Select value={formData.company_id || 'none'} onValueChange={(v) => setFormData({ ...formData, company_id: v === 'none' ? '' : v })}>
+                <Select value={formData.company_id || 'none'} onValueChange={(v) => {
+                  const companyId = v === 'none' ? '' : v;
+                  const company = companies.find(c => c.id === companyId);
+                  setFormData({ 
+                    ...formData, 
+                    company_id: companyId,
+                    salesperson_id: company?.salesperson_id || formData.salesperson_id
+                  });
+                }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
@@ -451,16 +464,16 @@ export default function Quotes() {
 
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label>Vendedor</Label>
+                <Label>Vendedor *</Label>
                 <Select
                   value={formData.salesperson_id || 'none'}
-                  onValueChange={(v) => setFormData({ ...formData, salesperson_id: v === 'none' ? null : v })}
+                  onValueChange={(v) => setFormData({ ...formData, salesperson_id: v === 'none' ? '' : v })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Nenhum</SelectItem>
+                    <SelectItem value="none">Selecione...</SelectItem>
                     {salespersonOptions.map((s) => (
                       <SelectItem key={s.id} value={s.id}>
                         {getSalespersonLabel(s.id)}
