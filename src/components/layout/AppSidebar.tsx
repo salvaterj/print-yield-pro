@@ -28,16 +28,32 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 
+type MenuSection = 'cadastros' | 'comercial' | 'sistema';
+
+type MenuItem = {
+  title: string;
+  url: string;
+  icon: React.ComponentType<{ className?: string }>;
+  profiles: Array<'admin' | 'vendas' | 'producao'>;
+  section: MenuSection;
+};
+
 const menuItems = [
-  { title: 'Clientes', url: '/clientes', icon: Users, profiles: ['admin', 'vendas'] },
-  { title: 'Transportadoras', url: '/transportadoras', icon: Truck, profiles: ['admin', 'vendas'] },
-  { title: 'Vendedores', url: '/vendedores', icon: UserCog, profiles: ['admin'] },
-  { title: 'Usuários', url: '/usuarios', icon: UserPlus, profiles: ['admin'] },
-  { title: 'Configurações', url: '/configuracoes', icon: Settings, profiles: ['admin'] },
-  { title: 'Bobinas', url: '/bobinas', icon: Package, profiles: ['admin', 'vendas', 'producao'] },
-  { title: 'Produtos', url: '/produtos', icon: PackageSearch, profiles: ['admin', 'vendas', 'producao'] },
-  { title: 'Orçamentos', url: '/orcamentos', icon: FileText, profiles: ['admin', 'vendas'] },
-  { title: 'Ordens de Serviço', url: '/os', icon: ClipboardList, profiles: ['admin', 'vendas', 'producao'] },
+  { title: 'Clientes', url: '/clientes', icon: Users, profiles: ['admin', 'vendas'], section: 'cadastros' },
+  { title: 'Transportadoras', url: '/transportadoras', icon: Truck, profiles: ['admin', 'vendas'], section: 'cadastros' },
+  { title: 'Vendedores', url: '/vendedores', icon: UserCog, profiles: ['admin'], section: 'cadastros' },
+  { title: 'Bobinas', url: '/bobinas', icon: Package, profiles: ['admin', 'vendas', 'producao'], section: 'cadastros' },
+  { title: 'Produtos', url: '/produtos', icon: PackageSearch, profiles: ['admin', 'vendas', 'producao'], section: 'cadastros' },
+  { title: 'Orçamentos', url: '/orcamentos', icon: FileText, profiles: ['admin', 'vendas'], section: 'comercial' },
+  { title: 'Ordens de Serviço', url: '/os', icon: ClipboardList, profiles: ['admin', 'vendas', 'producao'], section: 'comercial' },
+  { title: 'Usuários', url: '/usuarios', icon: UserPlus, profiles: ['admin'], section: 'sistema' },
+  { title: 'Configurações', url: '/configuracoes', icon: Settings, profiles: ['admin'], section: 'sistema' },
+] satisfies MenuItem[];
+
+const menuSections: Array<{ key: MenuSection; label: string }> = [
+  { key: 'cadastros', label: 'CADASTROS' },
+  { key: 'comercial', label: 'COMERCIAL' },
+  { key: 'sistema', label: 'SISTEMA' },
 ];
 
 export function AppSidebar() {
@@ -47,6 +63,30 @@ export function AppSidebar() {
   const [logoError, setLogoError] = useState(false);
   const { role } = useAuth();
   const filteredItems = menuItems.filter((item) => (role ? item.profiles.includes(role) : false));
+
+  const renderItems = (items: MenuItem[]) => (
+    <SidebarMenu>
+      {items.map((item) => (
+        <SidebarMenuItem key={item.title}>
+          <SidebarMenuButton
+            asChild
+            isActive={location.pathname === item.url}
+            tooltip={collapsed ? item.title : undefined}
+          >
+            <NavLink
+              to={item.url}
+              end={item.url === '/'}
+              className="flex items-center gap-3"
+              activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+            >
+              <item.icon className="h-4 w-4 shrink-0" />
+              {!collapsed && <span>{item.title}</span>}
+            </NavLink>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      ))}
+    </SidebarMenu>
+  );
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
@@ -79,32 +119,17 @@ export function AppSidebar() {
       </SidebarHeader>
       
       <SidebarContent className="scrollbar-thin">
-        <SidebarGroup>
-          <SidebarGroupLabel>Menu Principal</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {filteredItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton 
-                    asChild 
-                    isActive={location.pathname === item.url}
-                    tooltip={collapsed ? item.title : undefined}
-                  >
-                    <NavLink 
-                      to={item.url} 
-                      end={item.url === '/'}
-                      className="flex items-center gap-3"
-                      activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                    >
-                      <item.icon className="h-4 w-4 shrink-0" />
-                      {!collapsed && <span>{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {menuSections.map((section, index) => {
+          const sectionItems = filteredItems.filter((item) => item.section === section.key);
+          if (sectionItems.length === 0) return null;
+
+          return (
+            <SidebarGroup key={section.key} className={cn(index > 0 && 'mt-3')}>
+              <SidebarGroupLabel className="text-[11px] tracking-wide">{section.label}</SidebarGroupLabel>
+              <SidebarGroupContent>{renderItems(sectionItems)}</SidebarGroupContent>
+            </SidebarGroup>
+          );
+        })}
       </SidebarContent>
       
       <SidebarFooter className="border-t border-sidebar-border p-4">

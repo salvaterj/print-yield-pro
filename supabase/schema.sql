@@ -102,6 +102,11 @@ create table if not exists public.raw_products (
   usable_width_mm numeric(12,3) not null default 0,
   waste_percentage numeric(8,3) not null default 0,
   cost_per_meter numeric(12,4) not null default 0,
+  ipi_percentage numeric(8,3) not null default 0,
+  cost_total_no_ipi numeric(12,2) not null default 0,
+  cost_total_with_ipi numeric(12,2) not null default 0,
+  cost_per_m2_no_ipi numeric(12,6) not null default 0,
+  cost_per_m2_with_ipi numeric(12,6) not null default 0,
   cost_per_kg numeric(12,4),
   supplier_name text,
   notes text,
@@ -130,6 +135,15 @@ create table if not exists public.finished_products (
   default_raw_product_id uuid references public.raw_products(id) on delete set null,
   base_price numeric(12,2) not null default 0,
   minimum_quantity integer not null default 0,
+  unit_area_m2 numeric(12,8) not null default 0,
+  material_unit_cost_no_ipi numeric(12,6) not null default 0,
+  material_unit_cost_with_ipi numeric(12,6) not null default 0,
+  waste_percentage numeric(8,3) not null default 0,
+  margin_percentage numeric(8,3) not null default 0,
+  icms_percentage numeric(8,3) not null default 0,
+  price_pre_icms numeric(12,2) not null default 0,
+  suggested_price numeric(12,2) not null default 0,
+  profit_per_unit numeric(12,2) not null default 0,
   notes text,
   active boolean not null default true,
   created_at timestamptz not null default now(),
@@ -280,4 +294,3 @@ create policy "quote_items_all_authenticated" on public.quote_items for all to a
 create policy "work_orders_all_authenticated" on public.work_orders for all to authenticated using (true) with check (true);
 create policy "work_order_items_all_authenticated" on public.work_order_items for all to authenticated using (true) with check (true);
 create policy "system_settings_all_authenticated" on public.system_settings for all to authenticated using (true) with check (true);
-

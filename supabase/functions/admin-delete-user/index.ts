@@ -1,7 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.0';
 
-type Role = 'admin' | 'vendas' | 'producao';
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -33,19 +31,9 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const email = String(body.email || '').trim().toLowerCase();
-    const password = String(body.password || '');
-    const role = body.role as Role;
-
-    if (!email || !password) {
-      return new Response(JSON.stringify({ error: 'Email and password are required' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    if (role && role !== 'admin' && role !== 'vendas' && role !== 'producao') {
-      return new Response(JSON.stringify({ error: 'Invalid role' }), {
+    const userId = String(body.user_id || '').trim();
+    if (!userId) {
+      return new Response(JSON.stringify({ error: 'user_id is required' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -57,6 +45,13 @@ Deno.serve(async (req) => {
     if (callerError || !callerData?.user?.id) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (callerData.user.id === userId) {
+      return new Response(JSON.stringify({ error: 'Cannot delete your own user' }), {
+        status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -74,41 +69,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-    });
-
-    if (createError) {
-      return new Response(JSON.stringify({ error: createError.message }), {
+    const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+    if (deleteAuthError) {
+      return new Response(JSON.stringify({ error: deleteAuthError.message }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    if (!created?.user?.id) {
-      return new Response(JSON.stringify({ error: 'User not created' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    await supabaseAdmin.from('user_profiles').delete().eq('id', userId);
 
-    const { error: createProfileError } = await supabaseAdmin.from('user_profiles').insert({
-      id: created.user.id,
-      email,
-      role: role || 'vendas',
-      active: true,
-    });
-
-    if (createProfileError) {
-      return new Response(JSON.stringify({ error: createProfileError.message }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    return new Response(JSON.stringify({ ok: true, id: created.user.id }), {
+    return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {

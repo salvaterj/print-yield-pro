@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Plus, Pencil, Trash2, Search, FileText, Eye } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabaseClient';
 
 const quoteStatusOptions: Array<{ value: QuoteStatus; label: string }> = [
   { value: 'draft', label: 'Rascunho' },
@@ -50,6 +51,13 @@ const emptyQuoteItem: Omit<QuoteItem, 'id' | 'created_at' | 'updated_at'> = {
   sale_price: 0,
   total_price: 0,
   profit_margin: 0,
+  custom_image_url: null,
+  pantone_1: null,
+  pantone_2: null,
+  pantone_3: null,
+  pantone_1_hex: null,
+  pantone_2_hex: null,
+  pantone_3_hex: null,
   technical_notes: '',
 };
 
@@ -84,6 +92,7 @@ export default function Quotes() {
   const [isItemDialogOpen, setIsItemDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<QuoteItem | null>(null);
   const [itemFormData, setItemFormData] = useState(emptyQuoteItem);
+  const [uploadingCustomImage, setUploadingCustomImage] = useState(false);
 
   const companyOptions = useMemo(() => companies.filter((c) => c.active), [companies]);
   const carrierOptions = useMemo(() => carriers.filter((c) => c.active), [carriers]);
@@ -126,6 +135,38 @@ export default function Quotes() {
   };
 
   const getStatusLabel = (status: QuoteStatus) => quoteStatusOptions.find((o) => o.value === status)?.label || status;
+
+  const selectedFinishedProduct = useMemo(() => {
+    if (!itemFormData.finished_product_id) return null;
+    return finishedProducts.find((x) => x.id === itemFormData.finished_product_id) ?? null;
+  }, [finishedProducts, itemFormData.finished_product_id]);
+
+  const handleUploadCustomImage = async (file: File) => {
+    if (!supabase) {
+      toast.error('Supabase não está configurado');
+      return;
+    }
+
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const path = `custom/${globalThis.crypto?.randomUUID?.() || Date.now()}.${ext}`;
+
+    setUploadingCustomImage(true);
+    try {
+      const { error: uploadError } = await supabase.storage.from('product-images').upload(path, file, {
+        cacheControl: '3600',
+        upsert: true,
+      });
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from('product-images').getPublicUrl(path);
+      setItemFormData((prev) => ({ ...prev, custom_image_url: data.publicUrl }));
+      toast.success('Imagem enviada!');
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao enviar imagem');
+    } finally {
+      setUploadingCustomImage(false);
+    }
+  };
 
   const quoteTotal = (quoteId: string) =>
     quoteItems
@@ -234,6 +275,13 @@ export default function Quotes() {
         sale_price: item.sale_price || 0,
         total_price: item.total_price || 0,
         profit_margin: item.profit_margin || 0,
+        custom_image_url: item.custom_image_url ?? null,
+        pantone_1: item.pantone_1 ?? null,
+        pantone_2: item.pantone_2 ?? null,
+        pantone_3: item.pantone_3 ?? null,
+        pantone_1_hex: item.pantone_1_hex ?? null,
+        pantone_2_hex: item.pantone_2_hex ?? null,
+        pantone_3_hex: item.pantone_3_hex ?? null,
         technical_notes: item.technical_notes || '',
       });
     } else {
@@ -603,7 +651,22 @@ export default function Quotes() {
                 <Label>Produto acabado</Label>
                 <Select
                   value={itemFormData.finished_product_id || 'none'}
-                  onValueChange={(v) => setItemFormData(syncTotalPrice({ ...itemFormData, finished_product_id: v === 'none' ? null : v }))}
+                  onValueChange={(v) => {
+                    const id = v === 'none' ? null : v;
+                    const fp = finishedProducts.find((x) => x.id === id) ?? null;
+                    const next = {
+                      ...itemFormData,
+                      finished_product_id: id,
+                      pantone_1: fp?.pantone_1 ?? null,
+                      pantone_2: fp?.pantone_2 ?? null,
+                      pantone_3: fp?.pantone_3 ?? null,
+                      pantone_1_hex: fp?.pantone_1_hex ?? null,
+                      pantone_2_hex: fp?.pantone_2_hex ?? null,
+                      pantone_3_hex: fp?.pantone_3_hex ?? null,
+                      custom_image_url: null,
+                    };
+                    setItemFormData(syncTotalPrice(next));
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione..." />
@@ -646,6 +709,95 @@ export default function Quotes() {
                 value={itemFormData.description}
                 onChange={(e) => setItemFormData(syncTotalPrice({ ...itemFormData, description: e.target.value }))}
               />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Imagem do produto</Label>
+                <div className="h-24 w-24 rounded border bg-muted flex items-center justify-center overflow-hidden">
+                  {selectedFinishedProduct?.image_url ? (
+                    <img src={selectedFinishedProduct.image_url} alt="Produto" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Sem imagem</span>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Foto customizada</Label>
+                <div className="h-24 w-24 rounded border bg-muted flex items-center justify-center overflow-hidden">
+                  {itemFormData.custom_image_url ? (
+                    <img src={itemFormData.custom_image_url} alt="Custom" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Sem imagem</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {selectedFinishedProduct?.requires_custom_image && (
+              <div className="space-y-2">
+                <Label>Enviar foto customizada</Label>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  disabled={uploadingCustomImage}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void handleUploadCustomImage(f);
+                  }}
+                />
+              </div>
+            )}
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="item_pantone_1">Pantone 1</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="item_pantone_1"
+                    value={itemFormData.pantone_1 || ''}
+                    onChange={(e) => setItemFormData({ ...itemFormData, pantone_1: e.target.value || null })}
+                  />
+                  <Input
+                    type="color"
+                    value={itemFormData.pantone_1_hex || '#000000'}
+                    onChange={(e) => setItemFormData({ ...itemFormData, pantone_1_hex: e.target.value || null })}
+                    className="h-10 w-12 p-1"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="item_pantone_2">Pantone 2</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="item_pantone_2"
+                    value={itemFormData.pantone_2 || ''}
+                    onChange={(e) => setItemFormData({ ...itemFormData, pantone_2: e.target.value || null })}
+                  />
+                  <Input
+                    type="color"
+                    value={itemFormData.pantone_2_hex || '#000000'}
+                    onChange={(e) => setItemFormData({ ...itemFormData, pantone_2_hex: e.target.value || null })}
+                    className="h-10 w-12 p-1"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="item_pantone_3">Pantone 3 (Chapado)</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="item_pantone_3"
+                    value={itemFormData.pantone_3 || ''}
+                    onChange={(e) => setItemFormData({ ...itemFormData, pantone_3: e.target.value || null })}
+                  />
+                  <Input
+                    type="color"
+                    value={itemFormData.pantone_3_hex || '#000000'}
+                    onChange={(e) => setItemFormData({ ...itemFormData, pantone_3_hex: e.target.value || null })}
+                    className="h-10 w-12 p-1"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-4 gap-4">

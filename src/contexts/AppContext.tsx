@@ -201,6 +201,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       : `${Date.now()}-${Math.random()}`.replace('.', '');
   };
 
+  const isUuid = (value: string) => {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  };
+
   const requireSupabase = () => {
     if (!isSupabaseConfigured || !supabase) throw new Error('Supabase não está configurado');
     if (!user) throw new Error('Faça login para salvar no Supabase');
@@ -629,28 +633,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const saveSystemSettings = async (input: Omit<SystemSettings, 'id' | 'created_at' | 'updated_at'>) => {
     const now = new Date().toISOString();
-    const existingId = systemSettings?.id && systemSettings.id.length > 10 ? systemSettings.id : null;
+    const existingId = systemSettings?.id && isUuid(systemSettings.id) ? systemSettings.id : null;
 
     if (!existingId) {
-      const row: SystemSettings = { ...input, id: newId(), created_at: now, updated_at: now };
-      setSystemSettings(row);
       try {
         const sb = requireSupabase();
-        const { error } = await sb.from('system_settings').insert(row);
+        const { data, error } = await sb
+          .from('system_settings')
+          .insert({ ...input, created_at: now, updated_at: now })
+          .select('*')
+          .single();
         if (error) throw error;
+        const row = data as SystemSettings;
+        setSystemSettings(row);
         return row;
       } catch (e: any) {
         throw new Error(e?.message || 'Falha ao salvar configurações');
       }
     }
 
-    const next: SystemSettings = { ...systemSettings, ...input, updated_at: now };
-    setSystemSettings(next);
     try {
       const sb = requireSupabase();
-      const { error } = await sb.from('system_settings').update({ ...input, updated_at: now }).eq('id', existingId);
+      const { data, error } = await sb
+        .from('system_settings')
+        .update({ ...input, updated_at: now })
+        .eq('id', existingId)
+        .select('*')
+        .maybeSingle();
       if (error) throw error;
-      return next;
+
+      if (!data) {
+        const { data: created, error: createError } = await sb
+          .from('system_settings')
+          .insert({ ...input, created_at: now, updated_at: now })
+          .select('*')
+          .single();
+        if (createError) throw createError;
+        const row = created as SystemSettings;
+        setSystemSettings(row);
+        return row;
+      }
+
+      const row = data as SystemSettings;
+      setSystemSettings(row);
+      return row;
     } catch (e: any) {
       throw new Error(e?.message || 'Falha ao salvar configurações');
     }

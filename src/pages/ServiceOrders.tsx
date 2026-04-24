@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Plus, Pencil, Trash2, Search, ClipboardList, Eye } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabaseClient';
 
 const statusOptions: Array<{ value: WorkOrderStatus; label: string }> = [
   { value: 'pending', label: 'Pendente' },
@@ -61,6 +62,13 @@ const emptyWorkOrderItem: Omit<WorkOrderItem, 'id' | 'created_at' | 'updated_at'
   material_used_meters: 0,
   waste_meters: 0,
   setup_notes: '',
+  custom_image_url: null,
+  pantone_1: null,
+  pantone_2: null,
+  pantone_3: null,
+  pantone_1_hex: null,
+  pantone_2_hex: null,
+  pantone_3_hex: null,
   technical_notes: '',
 };
 
@@ -95,6 +103,7 @@ export default function ServiceOrders() {
   const [isItemDialogOpen, setIsItemDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<WorkOrderItem | null>(null);
   const [itemFormData, setItemFormData] = useState(emptyWorkOrderItem);
+  const [uploadingCustomImage, setUploadingCustomImage] = useState(false);
 
   const companyOptions = useMemo(() => companies.filter((c) => c.active), [companies]);
   const carrierOptions = useMemo(() => carriers.filter((c) => c.active), [carriers]);
@@ -131,6 +140,38 @@ export default function ServiceOrders() {
 
   const getStatusLabel = (status: WorkOrderStatus) => statusOptions.find((o) => o.value === status)?.label || status;
   const getStageLabel = (stage: WorkflowStage) => stageOptions.find((o) => o.value === stage)?.label || stage;
+
+  const selectedFinishedProduct = useMemo(() => {
+    if (!itemFormData.finished_product_id) return null;
+    return finishedProducts.find((x) => x.id === itemFormData.finished_product_id) ?? null;
+  }, [finishedProducts, itemFormData.finished_product_id]);
+
+  const handleUploadCustomImage = async (file: File) => {
+    if (!supabase) {
+      toast.error('Supabase não está configurado');
+      return;
+    }
+
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const path = `custom/${globalThis.crypto?.randomUUID?.() || Date.now()}.${ext}`;
+
+    setUploadingCustomImage(true);
+    try {
+      const { error: uploadError } = await supabase.storage.from('product-images').upload(path, file, {
+        cacheControl: '3600',
+        upsert: true,
+      });
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from('product-images').getPublicUrl(path);
+      setItemFormData((prev) => ({ ...prev, custom_image_url: data.publicUrl }));
+      toast.success('Imagem enviada!');
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao enviar imagem');
+    } finally {
+      setUploadingCustomImage(false);
+    }
+  };
 
   const orderItemsCount = (workOrderId: string) => workOrderItems.filter((it) => it.work_order_id === workOrderId).length;
 
@@ -231,6 +272,13 @@ export default function ServiceOrders() {
         material_used_meters: item.material_used_meters || 0,
         waste_meters: item.waste_meters || 0,
         setup_notes: item.setup_notes || '',
+        custom_image_url: item.custom_image_url ?? null,
+        pantone_1: item.pantone_1 ?? null,
+        pantone_2: item.pantone_2 ?? null,
+        pantone_3: item.pantone_3 ?? null,
+        pantone_1_hex: item.pantone_1_hex ?? null,
+        pantone_2_hex: item.pantone_2_hex ?? null,
+        pantone_3_hex: item.pantone_3_hex ?? null,
         technical_notes: item.technical_notes || '',
       });
     } else {
@@ -620,7 +668,21 @@ export default function ServiceOrders() {
                 <Label>Produto acabado</Label>
                 <Select
                   value={itemFormData.finished_product_id || 'none'}
-                  onValueChange={(v) => setItemFormData({ ...itemFormData, finished_product_id: v === 'none' ? null : v })}
+                  onValueChange={(v) => {
+                    const id = v === 'none' ? null : v;
+                    const fp = finishedProducts.find((x) => x.id === id) ?? null;
+                    setItemFormData({
+                      ...itemFormData,
+                      finished_product_id: id,
+                      pantone_1: fp?.pantone_1 ?? null,
+                      pantone_2: fp?.pantone_2 ?? null,
+                      pantone_3: fp?.pantone_3 ?? null,
+                      pantone_1_hex: fp?.pantone_1_hex ?? null,
+                      pantone_2_hex: fp?.pantone_2_hex ?? null,
+                      pantone_3_hex: fp?.pantone_3_hex ?? null,
+                      custom_image_url: null,
+                    });
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione..." />
@@ -656,6 +718,95 @@ export default function ServiceOrders() {
             <div className="space-y-2">
               <Label htmlFor="description">Descrição</Label>
               <Input id="description" value={itemFormData.description} onChange={(e) => setItemFormData({ ...itemFormData, description: e.target.value })} />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Imagem do produto</Label>
+                <div className="h-24 w-24 rounded border bg-muted flex items-center justify-center overflow-hidden">
+                  {selectedFinishedProduct?.image_url ? (
+                    <img src={selectedFinishedProduct.image_url} alt="Produto" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Sem imagem</span>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Foto customizada</Label>
+                <div className="h-24 w-24 rounded border bg-muted flex items-center justify-center overflow-hidden">
+                  {itemFormData.custom_image_url ? (
+                    <img src={itemFormData.custom_image_url} alt="Custom" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Sem imagem</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {selectedFinishedProduct?.requires_custom_image && (
+              <div className="space-y-2">
+                <Label>Enviar foto customizada</Label>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  disabled={uploadingCustomImage}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void handleUploadCustomImage(f);
+                  }}
+                />
+              </div>
+            )}
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="item_pantone_1">Pantone 1</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="item_pantone_1"
+                    value={itemFormData.pantone_1 || ''}
+                    onChange={(e) => setItemFormData({ ...itemFormData, pantone_1: e.target.value || null })}
+                  />
+                  <Input
+                    type="color"
+                    value={itemFormData.pantone_1_hex || '#000000'}
+                    onChange={(e) => setItemFormData({ ...itemFormData, pantone_1_hex: e.target.value || null })}
+                    className="h-10 w-12 p-1"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="item_pantone_2">Pantone 2</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="item_pantone_2"
+                    value={itemFormData.pantone_2 || ''}
+                    onChange={(e) => setItemFormData({ ...itemFormData, pantone_2: e.target.value || null })}
+                  />
+                  <Input
+                    type="color"
+                    value={itemFormData.pantone_2_hex || '#000000'}
+                    onChange={(e) => setItemFormData({ ...itemFormData, pantone_2_hex: e.target.value || null })}
+                    className="h-10 w-12 p-1"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="item_pantone_3">Pantone 3 (Chapado)</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="item_pantone_3"
+                    value={itemFormData.pantone_3 || ''}
+                    onChange={(e) => setItemFormData({ ...itemFormData, pantone_3: e.target.value || null })}
+                  />
+                  <Input
+                    type="color"
+                    value={itemFormData.pantone_3_hex || '#000000'}
+                    onChange={(e) => setItemFormData({ ...itemFormData, pantone_3_hex: e.target.value || null })}
+                    className="h-10 w-12 p-1"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-4 gap-4">

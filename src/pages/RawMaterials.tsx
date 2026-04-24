@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { RawProduct } from '@/types';
+import { formatBRL, formatMM } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,11 +24,18 @@ const emptyRawProduct: Omit<RawProduct, 'id' | 'created_at' | 'updated_at'> = {
   usable_width_mm: 0,
   waste_percentage: 0,
   cost_per_meter: 0,
+  ipi_percentage: 0,
+  cost_total_no_ipi: 0,
+  cost_total_with_ipi: 0,
+  cost_per_m2_no_ipi: 0,
+  cost_per_m2_with_ipi: 0,
   cost_per_kg: null,
   supplier_name: '',
   notes: '',
   active: true,
 };
+
+type LastCostEdited = 'total' | 'meter';
 
 export default function RawMaterials() {
   const { rawProducts, addRawProduct, updateRawProduct, deleteRawProduct } = useApp();
@@ -37,6 +45,41 @@ export default function RawMaterials() {
   const [editingItem, setEditingItem] = useState<RawProduct | null>(null);
   const [deletingItem, setDeletingItem] = useState<RawProduct | null>(null);
   const [formData, setFormData] = useState(emptyRawProduct);
+  const [lastCostEdited, setLastCostEdited] = useState<LastCostEdited>('meter');
+  const [costInputMode, setCostInputMode] = useState<LastCostEdited>('meter');
+
+  const recalc = useMemo(() => {
+    return (next: typeof formData, last: LastCostEdited) => {
+      const usableWidthMm = Number(next.usable_width_mm) || 0;
+      const usableWidthM = usableWidthMm / 1000;
+      const lengthM = Number(next.length_m) || 0;
+      const areaTotalM2 = usableWidthM > 0 && lengthM > 0 ? usableWidthM * lengthM : 0;
+      const ipiPct = Number(next.ipi_percentage) || 0;
+      const ipiFactor = 1 + (ipiPct / 100);
+
+      let costTotalNoIpi = Number(next.cost_total_no_ipi) || 0;
+      let costPerMeterNoIpi = Number(next.cost_per_meter) || 0;
+
+      if (last === 'total') {
+        costPerMeterNoIpi = lengthM > 0 ? costTotalNoIpi / lengthM : 0;
+      } else {
+        costTotalNoIpi = lengthM > 0 ? costPerMeterNoIpi * lengthM : 0;
+      }
+
+      const costPerM2NoIpi = areaTotalM2 > 0 ? costTotalNoIpi / areaTotalM2 : 0;
+      const costTotalWithIpi = costTotalNoIpi * ipiFactor;
+      const costPerM2WithIpi = costPerM2NoIpi * ipiFactor;
+
+      return {
+        ...next,
+        cost_total_no_ipi: Number.isFinite(costTotalNoIpi) ? costTotalNoIpi : 0,
+        cost_per_meter: Number.isFinite(costPerMeterNoIpi) ? costPerMeterNoIpi : 0,
+        cost_per_m2_no_ipi: Number.isFinite(costPerM2NoIpi) ? costPerM2NoIpi : 0,
+        cost_total_with_ipi: Number.isFinite(costTotalWithIpi) ? costTotalWithIpi : 0,
+        cost_per_m2_with_ipi: Number.isFinite(costPerM2WithIpi) ? costPerM2WithIpi : 0,
+      };
+    };
+  }, []);
 
   const filtered = rawProducts.filter((rp) =>
     (rp.code?.toLowerCase() || '').includes(search.toLowerCase()) ||
@@ -47,7 +90,11 @@ export default function RawMaterials() {
   const handleOpenDialog = (item?: RawProduct) => {
     if (item) {
       setEditingItem(item);
-      setFormData({
+      const inferredMode: LastCostEdited =
+        (item.cost_total_no_ipi || 0) > 0 && (item.cost_per_meter || 0) === 0 ? 'total' : 'meter';
+      setLastCostEdited(inferredMode);
+      setCostInputMode(inferredMode);
+      setFormData(recalc({
         code: item.code || '',
         name: item.name || '',
         material_type: item.material_type || '',
@@ -57,13 +104,20 @@ export default function RawMaterials() {
         usable_width_mm: item.usable_width_mm || 0,
         waste_percentage: item.waste_percentage || 0,
         cost_per_meter: item.cost_per_meter || 0,
+        ipi_percentage: item.ipi_percentage || 0,
+        cost_total_no_ipi: item.cost_total_no_ipi || 0,
+        cost_total_with_ipi: item.cost_total_with_ipi || 0,
+        cost_per_m2_no_ipi: item.cost_per_m2_no_ipi || 0,
+        cost_per_m2_with_ipi: item.cost_per_m2_with_ipi || 0,
         cost_per_kg: item.cost_per_kg ?? null,
         supplier_name: item.supplier_name || '',
         notes: item.notes || '',
         active: item.active ?? true,
-      });
+      }, inferredMode));
     } else {
       setEditingItem(null);
+      setLastCostEdited('meter');
+      setCostInputMode('meter');
       setFormData(emptyRawProduct);
     }
     setIsDialogOpen(true);
@@ -75,12 +129,14 @@ export default function RawMaterials() {
       return;
     }
 
+    const toSave = recalc(formData, lastCostEdited);
+
     try {
       if (editingItem) {
-        await updateRawProduct(editingItem.id, formData);
+        await updateRawProduct(editingItem.id, toSave);
         toast.success('Bobina atualizada com sucesso!');
       } else {
-        await addRawProduct(formData);
+        await addRawProduct(toSave);
         toast.success('Bobina cadastrada com sucesso!');
       }
       setIsDialogOpen(false);
@@ -140,7 +196,8 @@ export default function RawMaterials() {
                 <TableHead>Nome</TableHead>
                 <TableHead>Material</TableHead>
                 <TableHead className="text-right">Largura (mm)</TableHead>
-                <TableHead className="text-right">Custo/m</TableHead>
+                <TableHead className="text-right">Custo/m (s/ IPI)</TableHead>
+                <TableHead className="text-right">Custo/m² (c/ IPI)</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -148,7 +205,7 @@ export default function RawMaterials() {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     Nenhuma bobina encontrada
                   </TableCell>
                 </TableRow>
@@ -158,8 +215,9 @@ export default function RawMaterials() {
                     <TableCell>{rp.code}</TableCell>
                     <TableCell className="font-medium">{rp.name}</TableCell>
                     <TableCell>{rp.material_type}</TableCell>
-                    <TableCell className="text-right">{rp.width_mm}</TableCell>
-                    <TableCell className="text-right">R$ {rp.cost_per_meter.toFixed(4)}</TableCell>
+                    <TableCell className="text-right">{formatMM(rp.width_mm, 0)}</TableCell>
+                    <TableCell className="text-right">{formatBRL(rp.cost_per_meter || 0, 6)}</TableCell>
+                    <TableCell className="text-right">{formatBRL(rp.cost_per_m2_with_ipi || 0, 4)}</TableCell>
                     <TableCell>{rp.active ? 'Ativo' : 'Inativo'}</TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(rp)}>
@@ -239,7 +297,7 @@ export default function RawMaterials() {
                   type="number"
                   step="0.01"
                   value={formData.length_m}
-                  onChange={(e) => setFormData({ ...formData, length_m: Number(e.target.value) })}
+                  onChange={(e) => setFormData(recalc({ ...formData, length_m: Number(e.target.value) }, lastCostEdited))}
                 />
               </div>
               <div className="space-y-2">
@@ -259,7 +317,7 @@ export default function RawMaterials() {
                   type="number"
                   step="0.01"
                   value={formData.usable_width_mm}
-                  onChange={(e) => setFormData({ ...formData, usable_width_mm: Number(e.target.value) })}
+                  onChange={(e) => setFormData(recalc({ ...formData, usable_width_mm: Number(e.target.value) }, lastCostEdited))}
                 />
               </div>
             </div>
@@ -276,14 +334,84 @@ export default function RawMaterials() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="cost_per_meter">Custo por metro</Label>
+                <Label htmlFor="cost_per_meter">Custo por metro sem IPI</Label>
                 <Input
                   id="cost_per_meter"
                   type="number"
-                  step="0.0001"
+                  step="0.000001"
                   value={formData.cost_per_meter}
-                  onChange={(e) => setFormData({ ...formData, cost_per_meter: Number(e.target.value) })}
+                  disabled={costInputMode !== 'meter'}
+                  onChange={(e) => {
+                    const next = recalc({ ...formData, cost_per_meter: Number(e.target.value) }, 'meter');
+                    setLastCostEdited('meter');
+                    setFormData(next);
+                  }}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cost_total_no_ipi">Custo total sem IPI</Label>
+                <Input
+                  id="cost_total_no_ipi"
+                  type="number"
+                  step="0.01"
+                  value={formData.cost_total_no_ipi}
+                  disabled={costInputMode !== 'total'}
+                  onChange={(e) => {
+                    const next = recalc({ ...formData, cost_total_no_ipi: Number(e.target.value) }, 'total');
+                    setLastCostEdited('total');
+                    setFormData(next);
+                  }}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ipi_percentage">% IPI</Label>
+                <Input
+                  id="ipi_percentage"
+                  type="number"
+                  step="0.01"
+                  value={formData.ipi_percentage}
+                  onChange={(e) => setFormData(recalc({ ...formData, ipi_percentage: Number(e.target.value) }, lastCostEdited))}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-sm">
+              <Button
+                type="button"
+                variant={costInputMode === 'meter' ? 'default' : 'outline'}
+                onClick={() => {
+                  setCostInputMode('meter');
+                  setLastCostEdited('meter');
+                  setFormData(recalc(formData, 'meter'));
+                }}
+              >
+                Editar custo por metro
+              </Button>
+              <Button
+                type="button"
+                variant={costInputMode === 'total' ? 'default' : 'outline'}
+                onClick={() => {
+                  setCostInputMode('total');
+                  setLastCostEdited('total');
+                  setFormData(recalc(formData, 'total'));
+                }}
+              >
+                Editar custo total
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="cost_per_m2_no_ipi">Custo por m² sem IPI</Label>
+                <Input id="cost_per_m2_no_ipi" value={formatBRL(formData.cost_per_m2_no_ipi, 4)} readOnly />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cost_per_m2_with_ipi">Custo por m² com IPI</Label>
+                <Input id="cost_per_m2_with_ipi" value={formatBRL(formData.cost_per_m2_with_ipi, 4)} readOnly />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cost_total_with_ipi">Custo total com IPI</Label>
+                <Input id="cost_total_with_ipi" value={formatBRL(formData.cost_total_with_ipi, 2)} readOnly />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="cost_per_kg">Custo por kg (opcional)</Label>
@@ -295,10 +423,11 @@ export default function RawMaterials() {
                   onChange={(e) => setFormData({ ...formData, cost_per_kg: e.target.value === '' ? null : Number(e.target.value) })}
                 />
               </div>
-              <div className="flex items-center gap-2 pt-8">
-                <Switch checked={formData.active} onCheckedChange={(checked) => setFormData({ ...formData, active: checked })} />
-                <Label>Ativo</Label>
-              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Switch checked={formData.active} onCheckedChange={(checked) => setFormData({ ...formData, active: checked })} />
+              <Label>Ativo</Label>
             </div>
 
             <div className="space-y-2">

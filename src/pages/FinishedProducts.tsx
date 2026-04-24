@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { FinishedProduct } from '@/types';
+import { supabase } from '@/lib/supabaseClient';
+import { formatBRL, formatM2, formatMM, formatNumberBR, formatPercentBR } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +36,23 @@ const emptyFinishedProduct: Omit<FinishedProduct, 'id' | 'created_at' | 'updated
   default_raw_product_id: null,
   base_price: 0,
   minimum_quantity: 0,
+  unit_area_m2: 0,
+  material_unit_cost_no_ipi: 0,
+  material_unit_cost_with_ipi: 0,
+  waste_percentage: 0,
+  margin_percentage: 0,
+  icms_percentage: 0,
+  price_pre_icms: 0,
+  suggested_price: 0,
+  profit_per_unit: 0,
+  image_url: null,
+  requires_custom_image: false,
+  pantone_1: null,
+  pantone_2: null,
+  pantone_3: null,
+  pantone_1_hex: null,
+  pantone_2_hex: null,
+  pantone_3_hex: null,
   notes: '',
   active: true,
 };
@@ -47,8 +66,83 @@ export default function FinishedProducts() {
   const [editingItem, setEditingItem] = useState<FinishedProduct | null>(null);
   const [deletingItem, setDeletingItem] = useState<FinishedProduct | null>(null);
   const [formData, setFormData] = useState(emptyFinishedProduct);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [wasteTouched, setWasteTouched] = useState(false);
 
   const rawProductOptions = useMemo(() => rawProducts.filter((rp) => rp.active), [rawProducts]);
+  const selectedRaw = useMemo(() => {
+    if (!formData.default_raw_product_id) return null;
+    return rawProducts.find((rp) => rp.id === formData.default_raw_product_id) ?? null;
+  }, [rawProducts, formData.default_raw_product_id]);
+
+  const calc = useMemo(() => {
+    const widthMm = Number(formData.width_mm) || 0;
+    const heightMm = Number(formData.height_mm) || 0;
+    const unitsPerMeter = Number(formData.units_per_meter) || 0;
+
+    const usableWidthMm = Number(selectedRaw?.usable_width_mm) || 0;
+    const usableWidthM = usableWidthMm / 1000;
+
+    const costPerM2NoIpi = Number(selectedRaw?.cost_per_m2_no_ipi) || 0;
+    const costPerM2WithIpi = Number(selectedRaw?.cost_per_m2_with_ipi) || 0;
+
+    const bobinaCostPerMeterNoIpi = costPerM2NoIpi * usableWidthM;
+    const bobinaCostPerMeterWithIpi = costPerM2WithIpi * usableWidthM;
+
+    const unitAreaM2 = (widthMm > 0 && heightMm > 0) ? (widthMm * heightMm) / 1000000 : 0;
+
+    const useYield = unitsPerMeter > 0 && bobinaCostPerMeterWithIpi > 0;
+    const method = useYield ? 'aproveitamento' : 'area';
+
+    const materialUnitNoIpi = useYield
+      ? bobinaCostPerMeterNoIpi / unitsPerMeter
+      : unitAreaM2 * costPerM2NoIpi;
+    const materialUnitWithIpi = useYield
+      ? bobinaCostPerMeterWithIpi / unitsPerMeter
+      : unitAreaM2 * costPerM2WithIpi;
+
+    const ipiApplied = materialUnitWithIpi - materialUnitNoIpi;
+
+    const wastePct = Number(formData.waste_percentage) || 0;
+    const marginPct = Number(formData.margin_percentage) || 0;
+    const icmsPct = Number(formData.icms_percentage) || 0;
+
+    const costWithWaste = materialUnitWithIpi * (1 + wastePct / 100);
+    const denomMargin = 1 - marginPct / 100;
+    const pricePreIcms = denomMargin > 0 ? costWithWaste / denomMargin : 0;
+    const denomIcms = 1 - icmsPct / 100;
+    const salePrice = denomIcms > 0 ? pricePreIcms / denomIcms : 0;
+    const profitPerUnit = pricePreIcms - costWithWaste;
+    const icmsValue = salePrice - pricePreIcms;
+    const marginValue = pricePreIcms - costWithWaste;
+
+    return {
+      method,
+      unitAreaM2,
+      usableWidthMm,
+      bobinaCostPerMeterNoIpi,
+      bobinaCostPerMeterWithIpi,
+      materialUnitNoIpi,
+      materialUnitWithIpi,
+      ipiApplied,
+      costWithWaste,
+      pricePreIcms,
+      salePrice,
+      profitPerUnit,
+      icmsValue,
+      marginValue,
+      invalidMargin: denomMargin <= 0,
+      invalidIcms: denomIcms <= 0,
+    };
+  }, [
+    formData.width_mm,
+    formData.height_mm,
+    formData.units_per_meter,
+    formData.waste_percentage,
+    formData.margin_percentage,
+    formData.icms_percentage,
+    selectedRaw,
+  ]);
 
   const filtered = finishedProducts.filter((fp) => {
     const matchesSearch =
@@ -61,6 +155,7 @@ export default function FinishedProducts() {
   const handleOpenDialog = (item?: FinishedProduct) => {
     if (item) {
       setEditingItem(item);
+      setWasteTouched(true);
       setFormData({
         code: item.code || '',
         name: item.name || '',
@@ -73,11 +168,29 @@ export default function FinishedProducts() {
         default_raw_product_id: item.default_raw_product_id ?? null,
         base_price: item.base_price || 0,
         minimum_quantity: item.minimum_quantity || 0,
+        unit_area_m2: item.unit_area_m2 || 0,
+        material_unit_cost_no_ipi: item.material_unit_cost_no_ipi || 0,
+        material_unit_cost_with_ipi: item.material_unit_cost_with_ipi || 0,
+        waste_percentage: item.waste_percentage || 0,
+        margin_percentage: item.margin_percentage || 0,
+        icms_percentage: item.icms_percentage || 0,
+        price_pre_icms: item.price_pre_icms || 0,
+        suggested_price: item.suggested_price || 0,
+        profit_per_unit: item.profit_per_unit || 0,
+        image_url: item.image_url ?? null,
+        requires_custom_image: item.requires_custom_image ?? false,
+        pantone_1: item.pantone_1 ?? null,
+        pantone_2: item.pantone_2 ?? null,
+        pantone_3: item.pantone_3 ?? null,
+        pantone_1_hex: item.pantone_1_hex ?? null,
+        pantone_2_hex: item.pantone_2_hex ?? null,
+        pantone_3_hex: item.pantone_3_hex ?? null,
         notes: item.notes || '',
         active: item.active ?? true,
       });
     } else {
       setEditingItem(null);
+      setWasteTouched(false);
       setFormData(emptyFinishedProduct);
     }
     setIsDialogOpen(true);
@@ -94,17 +207,54 @@ export default function FinishedProducts() {
       return;
     }
 
+    const payload: typeof formData = {
+      ...formData,
+      unit_area_m2: calc.unitAreaM2,
+      material_unit_cost_no_ipi: calc.materialUnitNoIpi,
+      material_unit_cost_with_ipi: calc.materialUnitWithIpi,
+      price_pre_icms: calc.pricePreIcms,
+      suggested_price: calc.salePrice,
+      profit_per_unit: calc.profitPerUnit,
+    };
+
     try {
       if (editingItem) {
-        await updateFinishedProduct(editingItem.id, formData);
+        await updateFinishedProduct(editingItem.id, payload);
         toast.success('Produto atualizado com sucesso!');
       } else {
-        await addFinishedProduct(formData);
+        await addFinishedProduct(payload);
         toast.success('Produto cadastrado com sucesso!');
       }
       setIsDialogOpen(false);
     } catch (e: any) {
       toast.error(e?.message || 'Falha ao salvar produto');
+    }
+  };
+
+  const handleUploadImage = async (file: File) => {
+    if (!supabase) {
+      toast.error('Supabase não está configurado');
+      return;
+    }
+
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const path = `products/${globalThis.crypto?.randomUUID?.() || Date.now()}.${ext}`;
+
+    setUploadingImage(true);
+    try {
+      const { error: uploadError } = await supabase.storage.from('product-images').upload(path, file, {
+        cacheControl: '3600',
+        upsert: true,
+      });
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from('product-images').getPublicUrl(path);
+      setFormData((prev) => ({ ...prev, image_url: data.publicUrl }));
+      toast.success('Imagem enviada!');
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao enviar imagem');
+    } finally {
+      setUploadingImage(false);
     }
   };
 
@@ -206,7 +356,7 @@ export default function FinishedProducts() {
                     <TableCell>{getProductTypeLabel(fp.product_type)}</TableCell>
                     <TableCell className="text-right">{fp.width_mm}</TableCell>
                     <TableCell className="text-right">{fp.height_mm}</TableCell>
-                    <TableCell className="text-right">R$ {fp.base_price.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">{formatBRL(fp.base_price, 2)}</TableCell>
                     <TableCell>{fp.active ? 'Ativo' : 'Inativo'}</TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(fp)}>
@@ -268,6 +418,92 @@ export default function FinishedProducts() {
               <div className="flex items-center gap-2 pt-8">
                 <Switch checked={formData.active} onCheckedChange={(checked) => setFormData({ ...formData, active: checked })} />
                 <Label>Ativo</Label>
+              </div>
+            </div>
+
+            {formData.product_type === 'custom' && (
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={formData.requires_custom_image}
+                  onCheckedChange={(checked) => setFormData({ ...formData, requires_custom_image: checked })}
+                />
+                <Label>Exige foto personalizada durante orçamento/produção</Label>
+              </div>
+            )}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Foto do produto</Label>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  disabled={uploadingImage}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void handleUploadImage(f);
+                  }}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Preview</Label>
+                <div className="h-24 w-24 rounded border bg-muted flex items-center justify-center overflow-hidden">
+                  {formData.image_url ? (
+                    <img src={formData.image_url} alt="Produto" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Sem imagem</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="pantone_1">Pantone 1</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="pantone_1"
+                    value={formData.pantone_1 || ''}
+                    onChange={(e) => setFormData({ ...formData, pantone_1: e.target.value || null })}
+                  />
+                  <Input
+                    type="color"
+                    value={formData.pantone_1_hex || '#000000'}
+                    onChange={(e) => setFormData({ ...formData, pantone_1_hex: e.target.value || null })}
+                    className="h-10 w-12 p-1"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pantone_2">Pantone 2</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="pantone_2"
+                    value={formData.pantone_2 || ''}
+                    onChange={(e) => setFormData({ ...formData, pantone_2: e.target.value || null })}
+                  />
+                  <Input
+                    type="color"
+                    value={formData.pantone_2_hex || '#000000'}
+                    onChange={(e) => setFormData({ ...formData, pantone_2_hex: e.target.value || null })}
+                    className="h-10 w-12 p-1"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pantone_3">Pantone 3 (Chapado)</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="pantone_3"
+                    value={formData.pantone_3 || ''}
+                    onChange={(e) => setFormData({ ...formData, pantone_3: e.target.value || null })}
+                  />
+                  <Input
+                    type="color"
+                    value={formData.pantone_3_hex || '#000000'}
+                    onChange={(e) => setFormData({ ...formData, pantone_3_hex: e.target.value || null })}
+                    className="h-10 w-12 p-1"
+                  />
+                </div>
               </div>
             </div>
 
@@ -348,7 +584,15 @@ export default function FinishedProducts() {
               <Label>Bobina padrão</Label>
               <Select
                 value={formData.default_raw_product_id || 'none'}
-                onValueChange={(v) => setFormData({ ...formData, default_raw_product_id: v === 'none' ? null : v })}
+                onValueChange={(v) => {
+                  const id = v === 'none' ? null : v;
+                  const rp = rawProducts.find((x) => x.id === id) ?? null;
+                  setFormData((prev) => ({
+                    ...prev,
+                    default_raw_product_id: id,
+                    waste_percentage: wasteTouched ? prev.waste_percentage : (rp?.waste_percentage || 0),
+                  }));
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione..." />
@@ -363,6 +607,147 @@ export default function FinishedProducts() {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="fp_waste_percentage">Perda (%)</Label>
+                <Input
+                  id="fp_waste_percentage"
+                  type="number"
+                  step="0.01"
+                  value={formData.waste_percentage}
+                  onChange={(e) => {
+                    setWasteTouched(true);
+                    setFormData({ ...formData, waste_percentage: Number(e.target.value) });
+                  }}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fp_margin_percentage">Margem (%)</Label>
+                <Input
+                  id="fp_margin_percentage"
+                  type="number"
+                  step="0.01"
+                  value={formData.margin_percentage}
+                  onChange={(e) => setFormData({ ...formData, margin_percentage: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fp_icms_percentage">ICMS (%)</Label>
+                <Input
+                  id="fp_icms_percentage"
+                  type="number"
+                  step="0.01"
+                  value={formData.icms_percentage}
+                  onChange={(e) => setFormData({ ...formData, icms_percentage: Number(e.target.value) })}
+                />
+              </div>
+            </div>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="font-medium">Resumo do cálculo</div>
+              </CardHeader>
+              <CardContent className="grid gap-2 text-sm">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">Bobina</div>
+                  <div>{selectedRaw ? getRawProductLabel(selectedRaw.id) : '-'}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">Largura útil</div>
+                  <div>{selectedRaw ? formatMM(calc.usableWidthMm, 0) : '-'}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">Custo por m² sem IPI</div>
+                  <div>{selectedRaw ? formatBRL(selectedRaw.cost_per_m2_no_ipi || 0, 4) : '-'}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">IPI</div>
+                  <div>{selectedRaw ? formatPercentBR(selectedRaw.ipi_percentage || 0, 2) : '-'}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">Custo por m² com IPI</div>
+                  <div>{selectedRaw ? formatBRL(selectedRaw.cost_per_m2_with_ipi || 0, 4) : '-'}</div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">Área da etiqueta</div>
+                  <div>{formatM2(calc.unitAreaM2, 8)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">Método</div>
+                  <div>{calc.method === 'aproveitamento' ? 'Aproveitamento (unidades/metro)' : 'Área (m²)'}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">Unidades por metro</div>
+                  <div>{Number(formData.units_per_meter) > 0 ? formatNumberBR(formData.units_per_meter, 0) : '-'}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">Custo por metro da bobina (s/ IPI)</div>
+                  <div>{formatBRL(calc.bobinaCostPerMeterNoIpi, 6)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">Custo por metro da bobina (c/ IPI)</div>
+                  <div>{formatBRL(calc.bobinaCostPerMeterWithIpi, 6)}</div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">Custo material sem IPI</div>
+                  <div>{formatBRL(calc.materialUnitNoIpi, 6)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">IPI aplicado</div>
+                  <div>{formatBRL(calc.ipiApplied, 6)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">Custo material com IPI</div>
+                  <div>{formatBRL(calc.materialUnitWithIpi, 6)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">Custo unitário final</div>
+                  <div>{formatBRL(calc.materialUnitWithIpi, 6)}</div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">Perda aplicada</div>
+                  <div>{formatPercentBR(formData.waste_percentage, 2)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">Custo com perda</div>
+                  <div>{formatBRL(calc.costWithWaste, 6)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">Margem</div>
+                  <div>{formatPercentBR(formData.margin_percentage, 2)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">Valor pré-ICMS</div>
+                  <div>{formatBRL(calc.pricePreIcms, 2)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">ICMS</div>
+                  <div>{formatPercentBR(formData.icms_percentage, 2)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">ICMS aplicado</div>
+                  <div>{formatBRL(calc.icmsValue, 2)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">Valor de venda</div>
+                  <div>{formatBRL(calc.salePrice, 2)}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-muted-foreground">Lucro por produto</div>
+                  <div>{formatBRL(calc.profitPerUnit, 2)}</div>
+                </div>
+
+                {(calc.invalidMargin || calc.invalidIcms) && (
+                  <div className="text-destructive">
+                    {calc.invalidMargin ? 'Margem inválida (>= 100%)' : 'ICMS inválido (>= 100%)'}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             <div className="space-y-2">
               <Label htmlFor="notes">Observações</Label>
