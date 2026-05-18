@@ -18,6 +18,10 @@ import ServiceOrderView from "./pages/ServiceOrderView";
 import Sellers from "./pages/Sellers";
 import UserManagement from "./pages/UserManagement";
 import SystemSettings from "./pages/SystemSettings";
+import StockRawMaterialEntry from "./pages/StockRawMaterialEntry";
+import StockProduction from "./pages/StockProduction";
+import StockFinishedProductsEntry from "./pages/StockFinishedProductsEntry";
+import StockBalance from "./pages/StockBalance";
 import Login from "./pages/Login";
 import Access from "./pages/Access";
 import NotFound from "./pages/NotFound";
@@ -146,6 +150,38 @@ const App = () => (
                   element={
                     <RequireRole allow={["admin", "vendas", "producao"]}>
                       <ServiceOrderView />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="/lancamentos-estoque/entrada-materia-prima"
+                  element={
+                    <RequireRole allow={["admin"]}>
+                      <StockRawMaterialEntry />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="/lancamentos-estoque/producao-produtos"
+                  element={
+                    <RequireRole allow={["admin"]}>
+                      <StockProduction />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="/lancamentos-estoque/entrada-produtos-prontos"
+                  element={
+                    <RequireRole allow={["admin"]}>
+                      <StockFinishedProductsEntry />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="/lancamentos-estoque/balanco"
+                  element={
+                    <RequireRole allow={["admin"]}>
+                      <StockBalance />
                     </RequireRole>
                   }
                 />

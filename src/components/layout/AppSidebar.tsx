@@ -4,6 +4,10 @@ import {
   PackageSearch, 
   FileText, 
   ClipboardList, 
+  ArrowDownToLine,
+  Factory,
+  PackagePlus,
+  Scale,
   Settings,
   UserCog,
   Users,
@@ -28,7 +32,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 
-type MenuSection = 'cadastros' | 'comercial' | 'sistema';
+type MenuSection = 'cadastros' | 'comercial' | 'estoque' | 'sistema';
 
 type MenuItem = {
   title: string;
@@ -38,7 +42,7 @@ type MenuItem = {
   section: MenuSection;
 };
 
-const menuItems = [
+const menuItems: MenuItem[] = [
   { title: 'Clientes', url: '/clientes', icon: Users, profiles: ['admin', 'vendas'], section: 'cadastros' },
   { title: 'Transportadoras', url: '/transportadoras', icon: Truck, profiles: ['admin', 'vendas'], section: 'cadastros' },
   { title: 'Vendedores', url: '/vendedores', icon: UserCog, profiles: ['admin'], section: 'cadastros' },
@@ -46,13 +50,18 @@ const menuItems = [
   { title: 'Produtos', url: '/produtos', icon: PackageSearch, profiles: ['admin', 'vendas', 'producao'], section: 'cadastros' },
   { title: 'Orçamentos', url: '/orcamentos', icon: FileText, profiles: ['admin', 'vendas'], section: 'comercial' },
   { title: 'Ordens de Serviço', url: '/os', icon: ClipboardList, profiles: ['admin', 'vendas', 'producao'], section: 'comercial' },
+  { title: 'Entrada Matéria-Prima', url: '/lancamentos-estoque/entrada-materia-prima', icon: ArrowDownToLine, profiles: ['admin'], section: 'estoque' },
+  { title: 'Produção de Produtos', url: '/lancamentos-estoque/producao-produtos', icon: Factory, profiles: ['admin'], section: 'estoque' },
+  { title: 'Entrada Produtos Prontos', url: '/lancamentos-estoque/entrada-produtos-prontos', icon: PackagePlus, profiles: ['admin'], section: 'estoque' },
+  { title: 'Balanço de Estoque', url: '/lancamentos-estoque/balanco', icon: Scale, profiles: ['admin'], section: 'estoque' },
   { title: 'Usuários', url: '/usuarios', icon: UserPlus, profiles: ['admin'], section: 'sistema' },
   { title: 'Configurações', url: '/configuracoes', icon: Settings, profiles: ['admin'], section: 'sistema' },
-] satisfies MenuItem[];
+];
 
 const menuSections: Array<{ key: MenuSection; label: string }> = [
   { key: 'cadastros', label: 'CADASTROS' },
   { key: 'comercial', label: 'COMERCIAL' },
+  { key: 'estoque', label: 'LANÇAMENTOS DE ESTOQUE' },
   { key: 'sistema', label: 'SISTEMA' },
 ];
 

@@ -237,3 +237,61 @@ export interface SystemSettings {
   created_at: string;
   updated_at: string;
 }
+
+export type StockMovementKind = 'raw_entry' | 'production' | 'finished_entry' | 'adjustment';
+
+export interface RawMaterialEntry {
+  id: string;
+  kind: 'raw_entry';
+  date: string;
+  raw_product_id: string;
+  rolls_in: number;
+  total_cost: number;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductionRecord {
+  id: string;
+  kind: 'production';
+  date: string;
+  raw_product_id: string;
+  finished_product_id: string;
+  units_produced: number;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FinishedProductEntry {
+  id: string;
+  kind: 'finished_entry';
+  date: string;
+  finished_product_id: string;
+  units_in: number;
+  total_cost: number;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type StockAdjustmentTarget = 'raw' | 'finished';
+
+export type StockAdjustmentDirection = 'in' | 'out';
+
+export interface StockAdjustment {
+  id: string;
+  kind: 'adjustment';
+  date: string;
+  target: StockAdjustmentTarget;
+  raw_product_id: string | null;
+  finished_product_id: string | null;
+  direction: StockAdjustmentDirection;
+  quantity: number;
+  total_cost: number | null;
+  reason: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}

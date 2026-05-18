@@ -1,11 +1,15 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo } from 'react';
 import { 
   Company, 
   Carrier,
   RawProduct, 
   FinishedProduct, 
+  FinishedProductEntry,
+  ProductionRecord,
   Quote, 
   QuoteItem,
+  RawMaterialEntry,
+  StockAdjustment,
   UserProfile,
   WorkOrderStatus,
   WorkOrder,
@@ -22,7 +26,11 @@ import {
   mockQuotes, 
   mockWorkOrders,
   mockWorkOrderItems,
+  mockFinishedProductEntries,
+  mockProductionRecords,
+  mockRawMaterialEntries,
   mockSalespeople,
+  mockStockAdjustments,
   mockSystemSettings
 } from '@/data/mockData';
 
@@ -59,6 +67,15 @@ interface AppContextType {
   setWorkOrders: React.Dispatch<React.SetStateAction<WorkOrder[]>>;
   workOrderItems: WorkOrderItem[];
   setWorkOrderItems: React.Dispatch<React.SetStateAction<WorkOrderItem[]>>;
+
+  rawMaterialEntries: RawMaterialEntry[];
+  setRawMaterialEntries: React.Dispatch<React.SetStateAction<RawMaterialEntry[]>>;
+  productionRecords: ProductionRecord[];
+  setProductionRecords: React.Dispatch<React.SetStateAction<ProductionRecord[]>>;
+  finishedProductEntries: FinishedProductEntry[];
+  setFinishedProductEntries: React.Dispatch<React.SetStateAction<FinishedProductEntry[]>>;
+  stockAdjustments: StockAdjustment[];
+  setStockAdjustments: React.Dispatch<React.SetStateAction<StockAdjustment[]>>;
   
   // CRUD helpers
   addCompany: (company: Omit<Company, 'id' | 'created_at' | 'updated_at'>) => Promise<Company>;
@@ -107,6 +124,26 @@ interface AppContextType {
   // Global search
   globalSearch: string;
   setGlobalSearch: (search: string) => void;
+
+  addRawMaterialEntry: (entry: Omit<RawMaterialEntry, 'id' | 'kind' | 'created_at' | 'updated_at'>) => Promise<RawMaterialEntry>;
+  updateRawMaterialEntry: (id: string, entry: Partial<Omit<RawMaterialEntry, 'id' | 'kind' | 'created_at'>>) => Promise<void>;
+  deleteRawMaterialEntry: (id: string) => Promise<void>;
+
+  addProductionRecord: (record: Omit<ProductionRecord, 'id' | 'kind' | 'created_at' | 'updated_at'>) => Promise<ProductionRecord>;
+  updateProductionRecord: (id: string, record: Partial<Omit<ProductionRecord, 'id' | 'kind' | 'created_at'>>) => Promise<void>;
+  deleteProductionRecord: (id: string) => Promise<void>;
+
+  addFinishedProductEntry: (entry: Omit<FinishedProductEntry, 'id' | 'kind' | 'created_at' | 'updated_at'>) => Promise<FinishedProductEntry>;
+  updateFinishedProductEntry: (id: string, entry: Partial<Omit<FinishedProductEntry, 'id' | 'kind' | 'created_at'>>) => Promise<void>;
+  deleteFinishedProductEntry: (id: string) => Promise<void>;
+
+  addStockAdjustment: (adjustment: Omit<StockAdjustment, 'id' | 'kind' | 'created_at' | 'updated_at'>) => Promise<StockAdjustment>;
+  updateStockAdjustment: (id: string, adjustment: Partial<Omit<StockAdjustment, 'id' | 'kind' | 'created_at'>>) => Promise<void>;
+  deleteStockAdjustment: (id: string) => Promise<void>;
+
+  getRawStockById: (rawProductId: string) => { meters: number; rolls: number; avg_cost_per_meter: number; stock_value: number };
+  getFinishedStockById: (finishedProductId: string) => { units: number; avg_cost_per_unit: number; stock_value: number };
+  getStockTotals: () => { total_value: number; negative_count: number };
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -127,6 +164,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>(() => loadStoredData(storageKeys.workOrders, mockWorkOrders));
   const [workOrderItems, setWorkOrderItems] = useState<WorkOrderItem[]>(() => loadStoredData(storageKeys.workOrderItems, mockWorkOrderItems));
+
+  const [rawMaterialEntries, setRawMaterialEntries] = useState<RawMaterialEntry[]>(() =>
+    loadStoredData(storageKeys.rawMaterialEntries, isSupabaseConfigured ? [] : mockRawMaterialEntries)
+  );
+  const [productionRecords, setProductionRecords] = useState<ProductionRecord[]>(() =>
+    loadStoredData(storageKeys.productionRecords, isSupabaseConfigured ? [] : mockProductionRecords)
+  );
+  const [finishedProductEntries, setFinishedProductEntries] = useState<FinishedProductEntry[]>(() =>
+    loadStoredData(storageKeys.finishedProductEntries, isSupabaseConfigured ? [] : mockFinishedProductEntries)
+  );
+  const [stockAdjustments, setStockAdjustments] = useState<StockAdjustment[]>(() =>
+    loadStoredData(storageKeys.stockAdjustments, isSupabaseConfigured ? [] : mockStockAdjustments)
+  );
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !user) return;
@@ -178,6 +228,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   useEffect(() => {
+    const validRaw = new Set(rawProducts.map((rp) => rp.id));
+    const validFinished = new Set(finishedProducts.map((fp) => fp.id));
+
+    setRawMaterialEntries((prev) => {
+      const next = prev.filter((e) => validRaw.has(e.raw_product_id));
+      return next.length === prev.length ? prev : next;
+    });
+
+    setProductionRecords((prev) => {
+      const next = prev.filter((e) => validRaw.has(e.raw_product_id) && validFinished.has(e.finished_product_id));
+      return next.length === prev.length ? prev : next;
+    });
+
+    setFinishedProductEntries((prev) => {
+      const next = prev.filter((e) => validFinished.has(e.finished_product_id));
+      return next.length === prev.length ? prev : next;
+    });
+
+    setStockAdjustments((prev) => {
+      const next = prev.filter((e) => {
+        if (e.target === 'raw') return !!e.raw_product_id && validRaw.has(e.raw_product_id);
+        if (e.target === 'finished') return !!e.finished_product_id && validFinished.has(e.finished_product_id);
+        return false;
+      });
+      return next.length === prev.length ? prev : next;
+    });
+  }, [finishedProducts, rawProducts]);
+
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(storageKeys.systemSettings, JSON.stringify(systemSettings));
       window.localStorage.setItem(storageKeys.companies, JSON.stringify(companies));
@@ -189,9 +268,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
       window.localStorage.setItem(storageKeys.quoteItems, JSON.stringify(quoteItems));
       window.localStorage.setItem(storageKeys.workOrders, JSON.stringify(workOrders));
       window.localStorage.setItem(storageKeys.workOrderItems, JSON.stringify(workOrderItems));
+      window.localStorage.setItem(storageKeys.rawMaterialEntries, JSON.stringify(rawMaterialEntries));
+      window.localStorage.setItem(storageKeys.productionRecords, JSON.stringify(productionRecords));
+      window.localStorage.setItem(storageKeys.finishedProductEntries, JSON.stringify(finishedProductEntries));
+      window.localStorage.setItem(storageKeys.stockAdjustments, JSON.stringify(stockAdjustments));
     }
     
-  }, [systemSettings, companies, carriers, salespeople, rawProducts, finishedProducts, quotes, quoteItems, workOrders, workOrderItems]);
+  }, [
+    systemSettings,
+    companies,
+    carriers,
+    salespeople,
+    rawProducts,
+    finishedProducts,
+    quotes,
+    quoteItems,
+    workOrders,
+    workOrderItems,
+    rawMaterialEntries,
+    productionRecords,
+    finishedProductEntries,
+    stockAdjustments,
+  ]);
   
   const [globalSearch, setGlobalSearch] = useState('');
 
@@ -703,6 +801,274 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return `CLI-${String(maxCode + 1).padStart(3, '0')}`;
   };
 
+  const addRawMaterialEntry = async (input: Omit<RawMaterialEntry, 'id' | 'kind' | 'created_at' | 'updated_at'>) => {
+    const now = new Date().toISOString();
+    const row: RawMaterialEntry = { ...input, id: newId(), kind: 'raw_entry', created_at: now, updated_at: now };
+    setRawMaterialEntries((prev) => [...prev, row]);
+    return row;
+  };
+
+  const updateRawMaterialEntry = async (
+    id: string,
+    updates: Partial<Omit<RawMaterialEntry, 'id' | 'kind' | 'created_at'>>
+  ) => {
+    const now = new Date().toISOString();
+    setRawMaterialEntries((prev) => prev.map((it) => (it.id === id ? { ...it, ...updates, updated_at: now } : it)));
+  };
+
+  const deleteRawMaterialEntry = async (id: string) => {
+    setRawMaterialEntries((prev) => prev.filter((it) => it.id !== id));
+  };
+
+  const addProductionRecord = async (input: Omit<ProductionRecord, 'id' | 'kind' | 'created_at' | 'updated_at'>) => {
+    const now = new Date().toISOString();
+    const row: ProductionRecord = { ...input, id: newId(), kind: 'production', created_at: now, updated_at: now };
+    setProductionRecords((prev) => [...prev, row]);
+    return row;
+  };
+
+  const updateProductionRecord = async (
+    id: string,
+    updates: Partial<Omit<ProductionRecord, 'id' | 'kind' | 'created_at'>>
+  ) => {
+    const now = new Date().toISOString();
+    setProductionRecords((prev) => prev.map((it) => (it.id === id ? { ...it, ...updates, updated_at: now } : it)));
+  };
+
+  const deleteProductionRecord = async (id: string) => {
+    setProductionRecords((prev) => prev.filter((it) => it.id !== id));
+  };
+
+  const addFinishedProductEntry = async (
+    input: Omit<FinishedProductEntry, 'id' | 'kind' | 'created_at' | 'updated_at'>
+  ) => {
+    const now = new Date().toISOString();
+    const row: FinishedProductEntry = { ...input, id: newId(), kind: 'finished_entry', created_at: now, updated_at: now };
+    setFinishedProductEntries((prev) => [...prev, row]);
+    return row;
+  };
+
+  const updateFinishedProductEntry = async (
+    id: string,
+    updates: Partial<Omit<FinishedProductEntry, 'id' | 'kind' | 'created_at'>>
+  ) => {
+    const now = new Date().toISOString();
+    setFinishedProductEntries((prev) => prev.map((it) => (it.id === id ? { ...it, ...updates, updated_at: now } : it)));
+  };
+
+  const deleteFinishedProductEntry = async (id: string) => {
+    setFinishedProductEntries((prev) => prev.filter((it) => it.id !== id));
+  };
+
+  const addStockAdjustment = async (input: Omit<StockAdjustment, 'id' | 'kind' | 'created_at' | 'updated_at'>) => {
+    const now = new Date().toISOString();
+    const row: StockAdjustment = { ...input, id: newId(), kind: 'adjustment', created_at: now, updated_at: now };
+    setStockAdjustments((prev) => [...prev, row]);
+    return row;
+  };
+
+  const updateStockAdjustment = async (
+    id: string,
+    updates: Partial<Omit<StockAdjustment, 'id' | 'kind' | 'created_at'>>
+  ) => {
+    const now = new Date().toISOString();
+    setStockAdjustments((prev) => prev.map((it) => (it.id === id ? { ...it, ...updates, updated_at: now } : it)));
+  };
+
+  const deleteStockAdjustment = async (id: string) => {
+    setStockAdjustments((prev) => prev.filter((it) => it.id !== id));
+  };
+
+  const stockComputed = useMemo(() => {
+    type RawState = { meters: number; stockValue: number; avgCostPerMeter: number };
+    type FinishedState = { units: number; stockValue: number; avgCostPerUnit: number };
+
+    const rawLengthById = new Map(rawProducts.map((rp) => [rp.id, Number(rp.length_m) || 0]));
+    const finishedUpmById = new Map(finishedProducts.map((fp) => [fp.id, Number(fp.units_per_meter) || 0]));
+
+    const rawStateById = new Map<string, RawState>();
+    const finishedStateById = new Map<string, FinishedState>();
+
+    const getRawState = (rawId: string) => {
+      const existing = rawStateById.get(rawId);
+      if (existing) return existing;
+      const created: RawState = { meters: 0, stockValue: 0, avgCostPerMeter: 0 };
+      rawStateById.set(rawId, created);
+      return created;
+    };
+
+    const getFinishedState = (finishedId: string) => {
+      const existing = finishedStateById.get(finishedId);
+      if (existing) return existing;
+      const created: FinishedState = { units: 0, stockValue: 0, avgCostPerUnit: 0 };
+      finishedStateById.set(finishedId, created);
+      return created;
+    };
+
+    const applyRawIn = (rawId: string, metersIn: number, costIn: number | null) => {
+      if (!Number.isFinite(metersIn) || metersIn === 0) return;
+      const st = getRawState(rawId);
+      const effectiveCostIn = costIn ?? metersIn * st.avgCostPerMeter;
+      const nextMeters = st.meters + metersIn;
+      const nextValue = st.stockValue + effectiveCostIn;
+      if (nextMeters === 0) {
+        st.meters = 0;
+        st.stockValue = 0;
+        st.avgCostPerMeter = 0;
+        return;
+      }
+      st.meters = nextMeters;
+      st.stockValue = nextValue;
+      st.avgCostPerMeter = nextValue / nextMeters;
+    };
+
+    const applyRawOut = (rawId: string, metersOut: number) => {
+      if (!Number.isFinite(metersOut) || metersOut === 0) return;
+      const st = getRawState(rawId);
+      const costOut = metersOut * st.avgCostPerMeter;
+      const nextMeters = st.meters - metersOut;
+      const nextValue = st.stockValue - costOut;
+      if (nextMeters === 0) {
+        st.meters = 0;
+        st.stockValue = 0;
+        st.avgCostPerMeter = 0;
+        return;
+      }
+      st.meters = nextMeters;
+      st.stockValue = nextValue;
+      st.avgCostPerMeter = st.avgCostPerMeter;
+    };
+
+    const applyFinishedIn = (finishedId: string, unitsIn: number, costIn: number | null) => {
+      if (!Number.isFinite(unitsIn) || unitsIn === 0) return;
+      const st = getFinishedState(finishedId);
+      const effectiveCostIn = costIn ?? unitsIn * st.avgCostPerUnit;
+      const nextUnits = st.units + unitsIn;
+      const nextValue = st.stockValue + effectiveCostIn;
+      if (nextUnits === 0) {
+        st.units = 0;
+        st.stockValue = 0;
+        st.avgCostPerUnit = 0;
+        return;
+      }
+      st.units = nextUnits;
+      st.stockValue = nextValue;
+      st.avgCostPerUnit = nextValue / nextUnits;
+    };
+
+    const applyFinishedOut = (finishedId: string, unitsOut: number) => {
+      if (!Number.isFinite(unitsOut) || unitsOut === 0) return;
+      const st = getFinishedState(finishedId);
+      const costOut = unitsOut * st.avgCostPerUnit;
+      const nextUnits = st.units - unitsOut;
+      const nextValue = st.stockValue - costOut;
+      if (nextUnits === 0) {
+        st.units = 0;
+        st.stockValue = 0;
+        st.avgCostPerUnit = 0;
+        return;
+      }
+      st.units = nextUnits;
+      st.stockValue = nextValue;
+      st.avgCostPerUnit = st.avgCostPerUnit;
+    };
+
+    const movements = [
+      ...rawMaterialEntries.map((m) => ({ kind: m.kind, date: m.date, created_at: m.created_at, id: m.id, payload: m })),
+      ...productionRecords.map((m) => ({ kind: m.kind, date: m.date, created_at: m.created_at, id: m.id, payload: m })),
+      ...finishedProductEntries.map((m) => ({ kind: m.kind, date: m.date, created_at: m.created_at, id: m.id, payload: m })),
+      ...stockAdjustments.map((m) => ({ kind: m.kind, date: m.date, created_at: m.created_at, id: m.id, payload: m })),
+    ].sort((a, b) => a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+
+    for (const move of movements) {
+      if (move.kind === 'raw_entry') {
+        const m = move.payload as RawMaterialEntry;
+        const lengthM = rawLengthById.get(m.raw_product_id) ?? 0;
+        const metersIn = (Number(m.rolls_in) || 0) * lengthM;
+        applyRawIn(m.raw_product_id, metersIn, Number(m.total_cost) || 0);
+        continue;
+      }
+
+      if (move.kind === 'finished_entry') {
+        const m = move.payload as FinishedProductEntry;
+        applyFinishedIn(m.finished_product_id, Number(m.units_in) || 0, Number(m.total_cost) || 0);
+        continue;
+      }
+
+      if (move.kind === 'adjustment') {
+        const m = move.payload as StockAdjustment;
+        const qty = Number(m.quantity) || 0;
+
+        if (m.target === 'raw' && m.raw_product_id) {
+          const lengthM = rawLengthById.get(m.raw_product_id) ?? 0;
+          const meters = qty * lengthM;
+          if (m.direction === 'in') applyRawIn(m.raw_product_id, meters, m.total_cost);
+          else applyRawOut(m.raw_product_id, meters);
+        }
+
+        if (m.target === 'finished' && m.finished_product_id) {
+          if (m.direction === 'in') applyFinishedIn(m.finished_product_id, qty, m.total_cost);
+          else applyFinishedOut(m.finished_product_id, qty);
+        }
+
+        continue;
+      }
+
+      if (move.kind === 'production') {
+        const m = move.payload as ProductionRecord;
+        const upm = finishedUpmById.get(m.finished_product_id) ?? 0;
+        const unitsProduced = Number(m.units_produced) || 0;
+        const metersConsumed = upm > 0 ? unitsProduced / upm : 0;
+
+        const rawSt = getRawState(m.raw_product_id);
+        const productionCost = metersConsumed * rawSt.avgCostPerMeter;
+
+        applyRawOut(m.raw_product_id, metersConsumed);
+        applyFinishedIn(m.finished_product_id, unitsProduced, productionCost);
+      }
+    }
+
+    const rawById = new Map<string, { meters: number; rolls: number; avg_cost_per_meter: number; stock_value: number }>();
+    for (const rp of rawProducts) {
+      const st = rawStateById.get(rp.id);
+      const meters = st?.meters ?? 0;
+      const stockValue = st?.stockValue ?? 0;
+      const avgCost = st?.avgCostPerMeter ?? 0;
+      const lengthM = rawLengthById.get(rp.id) ?? 0;
+      const rolls = lengthM > 0 ? meters / lengthM : 0;
+      rawById.set(rp.id, { meters, rolls, avg_cost_per_meter: avgCost, stock_value: stockValue });
+    }
+
+    const finishedById = new Map<string, { units: number; avg_cost_per_unit: number; stock_value: number }>();
+    for (const fp of finishedProducts) {
+      const st = finishedStateById.get(fp.id);
+      const units = st?.units ?? 0;
+      const stockValue = st?.stockValue ?? 0;
+      const avgCost = st?.avgCostPerUnit ?? 0;
+      finishedById.set(fp.id, { units, avg_cost_per_unit: avgCost, stock_value: stockValue });
+    }
+
+    const negativeCount =
+      Array.from(rawById.values()).filter((v) => v.meters < 0).length +
+      Array.from(finishedById.values()).filter((v) => v.units < 0).length;
+
+    const totalValue =
+      Array.from(rawById.values()).reduce((sum, v) => sum + v.stock_value, 0) +
+      Array.from(finishedById.values()).reduce((sum, v) => sum + v.stock_value, 0);
+
+    return { rawById, finishedById, totals: { total_value: totalValue, negative_count: negativeCount } };
+  }, [rawProducts, finishedProducts, rawMaterialEntries, productionRecords, finishedProductEntries, stockAdjustments]);
+
+  const getRawStockById = (rawProductId: string) => {
+    return stockComputed.rawById.get(rawProductId) ?? { meters: 0, rolls: 0, avg_cost_per_meter: 0, stock_value: 0 };
+  };
+
+  const getFinishedStockById = (finishedProductId: string) => {
+    return stockComputed.finishedById.get(finishedProductId) ?? { units: 0, avg_cost_per_unit: 0, stock_value: 0 };
+  };
+
+  const getStockTotals = () => stockComputed.totals;
+
   return (
     <AppContext.Provider value={{
       currentProfile, setCurrentProfile,
@@ -716,6 +1082,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       quoteItems, setQuoteItems, addQuoteItem, updateQuoteItem, deleteQuoteItem,
       workOrders, setWorkOrders, addWorkOrder, updateWorkOrder, updateWorkOrderStatus, deleteWorkOrder,
       workOrderItems, setWorkOrderItems, addWorkOrderItem, updateWorkOrderItem, deleteWorkOrderItem,
+      rawMaterialEntries, setRawMaterialEntries, addRawMaterialEntry, updateRawMaterialEntry, deleteRawMaterialEntry,
+      productionRecords, setProductionRecords, addProductionRecord, updateProductionRecord, deleteProductionRecord,
+      finishedProductEntries, setFinishedProductEntries, addFinishedProductEntry, updateFinishedProductEntry, deleteFinishedProductEntry,
+      stockAdjustments, setStockAdjustments, addStockAdjustment, updateStockAdjustment, deleteStockAdjustment,
+      getRawStockById,
+      getFinishedStockById,
+      getStockTotals,
       saveSystemSettings,
       getSalespersonByCompanyId,
       generateNextCompanyCode,

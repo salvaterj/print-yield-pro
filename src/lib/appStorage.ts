@@ -11,6 +11,10 @@ export const storageKeys = {
   quoteItems: 'rocha:quote-items',
   workOrders: 'rocha:work-orders',
   workOrderItems: 'rocha:work-order-items',
+  rawMaterialEntries: 'rocha:raw-material-entries',
+  productionRecords: 'rocha:production-records',
+  finishedProductEntries: 'rocha:finished-product-entries',
+  stockAdjustments: 'rocha:stock-adjustments',
 } as const;
 
 function canUseStorage() {

@@ -2,10 +2,14 @@ import {
   Carrier,
   Company,
   FinishedProduct,
+  FinishedProductEntry,
+  ProductionRecord,
   Quote,
   QuoteItem,
   RawProduct,
+  RawMaterialEntry,
   Salesperson,
+  StockAdjustment,
   SystemSettings,
   WorkOrder,
   WorkOrderItem,
@@ -205,6 +209,66 @@ export const mockQuoteItems: QuoteItem[] = [
 
 export const mockWorkOrders: WorkOrder[] = [];
 export const mockWorkOrderItems: WorkOrderItem[] = [];
+
+export const mockRawMaterialEntries: RawMaterialEntry[] = [
+  {
+    id: 'rme-001',
+    kind: 'raw_entry',
+    date: new Date().toISOString().slice(0, 10),
+    raw_product_id: 'raw-001',
+    rolls_in: 2,
+    total_cost: 900,
+    notes: 'Compra inicial',
+    created_at: now(),
+    updated_at: now(),
+  },
+];
+
+export const mockProductionRecords: ProductionRecord[] = [
+  {
+    id: 'prd-001',
+    kind: 'production',
+    date: new Date().toISOString().slice(0, 10),
+    raw_product_id: 'raw-001',
+    finished_product_id: 'fp-001',
+    units_produced: 5000,
+    notes: 'Lote piloto',
+    created_at: now(),
+    updated_at: now(),
+  },
+];
+
+export const mockFinishedProductEntries: FinishedProductEntry[] = [
+  {
+    id: 'fpe-001',
+    kind: 'finished_entry',
+    date: new Date().toISOString().slice(0, 10),
+    finished_product_id: 'fp-001',
+    units_in: 2000,
+    total_cost: 220,
+    notes: 'Compra para revenda',
+    created_at: now(),
+    updated_at: now(),
+  },
+];
+
+export const mockStockAdjustments: StockAdjustment[] = [
+  {
+    id: 'adj-001',
+    kind: 'adjustment',
+    date: new Date().toISOString().slice(0, 10),
+    target: 'raw',
+    raw_product_id: 'raw-001',
+    finished_product_id: null,
+    direction: 'out',
+    quantity: 1,
+    total_cost: null,
+    reason: 'Inventário',
+    notes: '',
+    created_at: now(),
+    updated_at: now(),
+  },
+];
 
 export const kanbanColumns = [
   { id: 'a_fazer', title: 'A Fazer' },
